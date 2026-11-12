@@ -1,0 +1,22 @@
+====================
+020 - DISPLAY BUFFER AND FONT GRAPHICS ENGINE
+
+<ssd1306> is real: the framebuffer, bitmap font and flush calls work today.
+There is no font: block, no TTF loading, and no display lambda.
+====================
+
+# espforge
+  <project name="display_font" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <i2c id="i2c0" sda="6" scl="7" frequency="400kHz" />
+  <wifi id="radio" />
+
+# devices
+  <ssd1306 id="oled" bus="$i2c0" address="0x3C" size="128x64" />
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <ntp id="clock" network="$home" />

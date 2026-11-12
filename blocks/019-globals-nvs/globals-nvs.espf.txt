@@ -1,0 +1,19 @@
+====================
+019 - GLOBAL STATE AND NON-VOLATILE STORAGE
+
+There is no globals declaration: the counter is a Rust static. <nvs> is the
+proposal, and the only missing half is persistence across resets.
+====================
+
+# espforge
+  <project name="globals_nvs" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+
+# devices
+  <button id="cycle_button" pin="4" pull_up="true" />
+
+# services
+  <nvs id="flash" />

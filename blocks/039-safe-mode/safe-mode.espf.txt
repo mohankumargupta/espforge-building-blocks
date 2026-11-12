@@ -1,0 +1,19 @@
+====================
+039 - BOOT LOOP DETECTION AND SAFE MODE RECOVERY
+
+<safe_mode> is a proposal. Wi-Fi is real, but there is no RTC-memory boot
+counter, no boot deadline, no fallback AP and no OTA to recover into.
+====================
+
+# espforge
+  <project name="safe_mode" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <safe_mode id="guard" boot_attempts="10" reboot_timeout="5min" />

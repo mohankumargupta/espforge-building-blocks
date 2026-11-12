@@ -1,0 +1,21 @@
+====================
+011 - NETWORK TIME AND SCHEDULED AUTOMATIONS
+
+<ntp> is real: one SNTP sync, then local reads. Timezones and on_time triggers
+are not: the 08:00 check lives in src/app.rs.
+====================
+
+# espforge
+  <project name="network_time" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+  <led id="daily_switch" pin="2" />
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <ntp id="clock" network="$home" />

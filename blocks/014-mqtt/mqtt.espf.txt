@@ -1,0 +1,21 @@
+====================
+014 - MQTT TRANSPORT AND AUTO-DISCOVERY
+
+<mqtt> is a proposal. The broker is a host name or address, not the
+capability reference the client services use.
+====================
+
+# espforge
+  <project name="mqtt" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+  <led id="onboard_led" pin="2" />
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <mqtt id="broker" network="$home" broker="192.168.1.100" port="1883" discovery="true" discovery_prefix="homeassistant" topic_prefix="test-node" />

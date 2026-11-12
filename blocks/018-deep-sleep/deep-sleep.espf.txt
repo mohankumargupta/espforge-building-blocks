@@ -1,0 +1,19 @@
+====================
+018 - DEEP SLEEP AND WAKEUP TRIGGERS
+
+<deep_sleep> is a proposal. Neither the RTC timer nor the wake pin has a
+runtime API today; sleep_now() is the intended handle.
+====================
+
+# espforge
+  <project name="deep_sleep" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+
+# devices
+  <led id="status_led" pin="2" />
+
+# services
+  <deep_sleep id="deep_sleep_control" run_duration="15s" sleep_duration="10min" wakeup_pin="3" wakeup_mode="invert" />

@@ -1,0 +1,19 @@
+====================
+017 - HARDWARE PULSE COUNTER AND RATE METERING
+
+No <pulse_counter> and no PCNT: a pulled-up <button> is sampled in
+src/app.rs. Hardware edge counting is still a proposal.
+====================
+
+# espforge
+  <project name="pulse_counter" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <gpio id="gpio4" pin="4" direction="input" />
+
+# devices
+  <button id="flow_sensor" gpio="$gpio4" pull_up="true" />
+
+# services

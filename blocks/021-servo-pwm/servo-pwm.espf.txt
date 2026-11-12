@@ -1,0 +1,18 @@
+====================
+021 - SERVOS AND CALIBRATED PULSE WIDTH MODULATION
+
+No LEDC and no <servo>: the 50 Hz pulse train is software-timed on an <led>
+pin with delay_ns. A PWM peripheral is still a proposal.
+====================
+
+# espforge
+  <project name="servo_pwm" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+
+# devices
+  <led id="servo_pwm" pin="3" />
+
+# services

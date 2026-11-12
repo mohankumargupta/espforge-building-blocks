@@ -1,0 +1,19 @@
+====================
+015 - ADDRESSABLE RGB LED STRIP (RMT ENGINE)
+
+<ws2812> is a proposal: there is no RMT peripheral element and no <light>
+device. The pin is declared like an <led> pin so its direction is checked.
+====================
+
+# espforge
+  <project name="rmt_led_strip" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <gpio id="gpio3" pin="3" direction="output" />
+
+# devices
+  <ws2812 id="desk_light" gpio="$gpio3" num_leds="30" rgb_order="grb" chipset="ws2812" />
+
+# services

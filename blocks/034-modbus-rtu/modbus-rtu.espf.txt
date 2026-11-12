@@ -1,0 +1,22 @@
+====================
+034 - MODBUS RTU AND RS485 HALF-DUPLEX ARBITRATION
+
+UART1 and the RS485 direction pin are real. There is no <modbus> controller:
+app.rs builds the request, toggles DE, and checks the CRC16 itself.
+
+GPIO20/21 (the roadmap's UART) are UART0, the C3 console pins, so the bus moves
+to GPIO0/1.
+====================
+
+# espforge
+  <project name="modbus_rtu" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <uart id="uart1" tx="0" rx="1" baud_rate="9600" />
+
+# devices
+  <led id="rs485_de" pin="10" />
+
+# services

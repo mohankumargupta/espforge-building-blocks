@@ -1,0 +1,21 @@
+====================
+037 - MATRIX KEYPAD SCANNING AND ANTI-GHOSTING
+
+Rows are <led> outputs driven low in turn, columns are pulled-up <button>
+inputs. app.rs scans the 2x2 grid and locks out a second key until release.
+GPIO2 is a C3 strapping pin, hence the expected check warning.
+====================
+
+# espforge
+  <project name="matrix_keypad" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <led id="row0" pin="0" />
+  <led id="row1" pin="1" />
+  <button id="col0" pin="2" pull_up="true" />
+  <button id="col1" pin="3" pull_up="true" />
+
+# services

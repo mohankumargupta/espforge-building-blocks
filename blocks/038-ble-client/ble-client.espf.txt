@@ -1,0 +1,19 @@
+====================
+038 - ACTIVE BLE CLIENT AND GATT CHARACTERISTIC POLLING
+
+<ble_client> and <ble> are proposals. There is no central-role stack, no GATT
+discovery and no notification subscription; app.rs only shows the intended read.
+====================
+
+# espforge
+  <project name="ble_client" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <ble id="radio" />
+
+# devices
+  <ble_client id="soil_node" radio="$radio" mac="DC:23:4F:91:0A:BC" />
+
+# services

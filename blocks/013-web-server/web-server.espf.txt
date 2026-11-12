@@ -1,0 +1,21 @@
+====================
+013 - EMBEDDED WEB SERVER AND LOCAL REST API
+
+<web_server> is a proposal. The network stack it needs is real: <wifi_station>
+provides it, exactly as the client services do.
+====================
+
+# espforge
+  <project name="web_server" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+  <led id="onboard_led" pin="2" />
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <web_server id="web" network="$home" port="80" version="2" include_internal="false" />

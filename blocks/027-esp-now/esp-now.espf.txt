@@ -1,0 +1,20 @@
+====================
+027 - ESP-NOW PEER-TO-PEER MESSAGING
+
+<esp_now> is a proposal. The button that triggers the message is real; there is
+no unassociated radio mode and no peer transport to send it over.
+====================
+
+# espforge
+  <project name="esp_now" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+  <button id="doorbell" pin="3" pull_up="true" />
+
+# services
+  <esp_now id="peer" wifi="$radio" peer="11:22:33:44:55:66" />

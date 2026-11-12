@@ -1,0 +1,18 @@
+====================
+016 - HARDWARE UART AND SERIAL SENSOR PARSING
+
+<uart> is real. There is no <mhz19> driver: the request frame, checksum and
+payload split are in src/app.rs.
+====================
+
+# espforge
+  <project name="uart_sensor" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <uart id="uart1" uart="UART1" tx="6" rx="7" baud_rate="9600" />
+
+# devices
+
+# services

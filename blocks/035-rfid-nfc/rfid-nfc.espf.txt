@@ -1,0 +1,20 @@
+====================
+035 - CONTACTLESS RFID/NFC TAG AUTHENTICATION
+
+The I2C bus is real and unbound, so app.rs drives the PN532 directly. There is
+no <pn532> driver and no tag entity: frame assembly and UID comparison live in
+src/app.rs.
+====================
+
+# espforge
+  <project name="rfid_nfc" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="100kHz" />
+
+# devices
+  <led id="door_strike" pin="10" />
+
+# services

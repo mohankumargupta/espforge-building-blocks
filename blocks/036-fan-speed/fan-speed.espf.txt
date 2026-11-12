@@ -1,0 +1,18 @@
+====================
+036 - MULTI-SPEED FAN CONTROLLER AND STATE ENGINE
+
+<pwm> and <fan> are proposals. There is no PWM peripheral to drive and no fan
+entity to command, so the speed table has nowhere to run.
+====================
+
+# espforge
+  <project name="fan_speed" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <pwm id="fan_speed" pin="3" frequency="25kHz" />
+  <fan id="ceiling" output="$fan_speed" speed_count="3" />
+
+# services

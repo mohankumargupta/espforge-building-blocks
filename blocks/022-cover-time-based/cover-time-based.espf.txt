@@ -1,0 +1,25 @@
+====================
+022 - MOTORIZED COVERS AND TIME-BASED STATE MACHINES
+
+No <cover> entity and no command transport: two <led> relays, three <button>
+controls and the transit timer in src/app.rs are the buildable half.
+====================
+
+# espforge
+  <project name="cover_time_based" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <gpio id="gpio6" pin="6" direction="input" />
+  <gpio id="gpio7" pin="7" direction="input" />
+  <gpio id="gpio10" pin="10" direction="input" />
+
+# devices
+  <led id="motor_open" pin="4" />
+  <led id="motor_close" pin="5" />
+  <button id="open_button" gpio="$gpio6" pull_up="true" />
+  <button id="close_button" gpio="$gpio7" pull_up="true" />
+  <button id="stop_button" gpio="$gpio10" pull_up="true" />
+
+# services

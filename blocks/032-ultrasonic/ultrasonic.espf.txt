@@ -1,0 +1,19 @@
+====================
+032 - ULTRASONIC DISTANCE AND FLIGHT TIMING
+
+Both pins are ordinary GPIO: the trigger is an <led> pulse and the echo is a
+<button> input. There is no input capture, so app.rs measures the echo by
+polling with delay_ns; the reading is coarse but real.
+====================
+
+# espforge
+  <project name="ultrasonic" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <led id="trig" pin="5" />
+  <button id="echo" pin="6" />
+
+# services

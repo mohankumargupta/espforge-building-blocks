@@ -1,0 +1,21 @@
+====================
+023 - QUADRATURE ROTARY ENCODERS AND KNOB INPUTS
+
+No <rotary_encoder> and no PCNT: two pulled-up <button> inputs are sampled in
+src/app.rs and the Gray-code transitions are decoded there.
+====================
+
+# espforge
+  <project name="rotary_encoder" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <gpio id="gpio6" pin="6" direction="input" />
+  <gpio id="gpio7" pin="7" direction="input" />
+
+# devices
+  <button id="encoder_a" gpio="$gpio6" pull_up="true" />
+  <button id="encoder_b" gpio="$gpio7" pull_up="true" />
+
+# services

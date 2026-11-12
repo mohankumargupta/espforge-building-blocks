@@ -1,0 +1,18 @@
+====================
+031 - INFRARED REMOTE CARRIER MODULATION AND PROTOCOL DECODING
+
+<ir_transmitter> and <ir_receiver> are proposals. Neither the 38 kHz carrier nor
+the edge-timed NEC decoder exists; no RMT element is implemented.
+====================
+
+# espforge
+  <project name="ir_remote" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <ir_transmitter id="ir_tx" pin="3" carrier="38kHz" duty="50" />
+  <ir_receiver id="ir_rx" pin="4" tolerance="25" />
+
+# services

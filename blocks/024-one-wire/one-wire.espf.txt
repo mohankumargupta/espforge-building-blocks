@@ -1,0 +1,19 @@
+====================
+024 - 1-WIRE BUS AND MULTI-DROP TEMPERATURE NETWORKS
+
+<one_wire> and <dallas_temp> are proposals. A standalone <gpio> is only a
+declaration, so the app has no line handle to bit-bang.
+====================
+
+# espforge
+  <project name="one_wire" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <one_wire id="ow_bus" pin="4" />
+
+# devices
+  <dallas_temp id="water_tank" one_wire="$ow_bus" index="0" />
+
+# services

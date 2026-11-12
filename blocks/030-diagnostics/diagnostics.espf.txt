@@ -1,0 +1,21 @@
+====================
+030 - SYSTEM HEALTH DIAGNOSTICS AND HARDWARE WATCHDOG
+
+<diagnostics> and <restart_button> are proposals. The app can wait for Wi-Fi and
+log, but it cannot read RSSI, heap use or uptime, and it cannot reset the chip.
+====================
+
+# espforge
+  <project name="diagnostics" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+  <restart_button id="restart_node" />
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <diagnostics id="health" network="$home" />

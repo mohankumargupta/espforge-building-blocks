@@ -1,0 +1,21 @@
+====================
+012 - CAPTIVE PORTAL AND WIFI PROVISIONING
+
+<wifi_ap> and <captive_portal> are proposals. The station half is the same
+<wifi_station> as block 002.
+====================
+
+# espforge
+  <project name="captive_portal" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <wifi_ap id="fallback" wifi="$radio" ssid="FallBack-Hotspot" password="provisioningpass" />
+  <captive_portal id="portal" network="$fallback" />

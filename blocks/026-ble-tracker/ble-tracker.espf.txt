@@ -1,0 +1,20 @@
+====================
+026 - BLUETOOTH LE SCANNER AND PRESENCE TRACKING
+
+<ble>, <ble_tracker> and <ble_presence> are proposals. They show the intended
+shape; the runtime has no BLE controller or advertisement parser today.
+====================
+
+# espforge
+  <project name="ble_tracker" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <ble id="radio" />
+
+# devices
+  <ble_presence id="key_beacon" mac="AA:BB:CC:DD:EE:FF" />
+
+# services
+  <ble_tracker id="ble" radio="$radio" />

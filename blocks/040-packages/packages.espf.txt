@@ -1,0 +1,20 @@
+====================
+040 - MODULAR PACKAGES AND CONFIGURATION COMPOSITION
+
+<include> is a proposal. Composition happens before code generation: today one
+project file is parsed and one app.rs is copied, with no merge or override
+stage. The rest of this file is an ordinary composed node.
+====================
+
+# espforge
+  <project name="composed_office_node" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+  <include file="common/system.espf.txt" />
+  <include file="common/wifi.espf.txt" />
+
+# peripherals
+# devices
+  <led id="status" pin="3" />
+
+# services

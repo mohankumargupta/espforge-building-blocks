@@ -1,0 +1,20 @@
+====================
+028 - CLIMATE CONTROL AND THERMOSTAT REGULATION
+
+No <climate> entity: the bang-bang loop, hysteresis and minimum off time are
+Rust over a real <scd4x> temperature reading and an <led> heater relay.
+====================
+
+# espforge
+  <project name="thermostat" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="100kHz" />
+
+# devices
+  <scd4x id="air" bus="$i2c0" address="0x62" />
+  <led id="heater" pin="3" />
+
+# services
