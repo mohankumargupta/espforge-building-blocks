@@ -1,0 +1,20 @@
+====================
+002 - WIFI AND OTA
+
+Wi-Fi is real; <ota> is the proposed element for this block. Remove that line
+to build the Wi-Fi half with espforge today.
+====================
+
+# espforge
+  <project name="wifi_ota" />
+  <chip type="esp32" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <ota id="ota" password="admin" />

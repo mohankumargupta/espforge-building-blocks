@@ -1,0 +1,16 @@
+====================
+005 - BINARY SENSOR WITH DEBOUNCE
+====================
+
+# espforge
+  <project name="binary_sensor" />
+  <chip type="esp32" />
+  <runtime type="blocking" />
+
+# peripherals
+  <gpio id="gpio4" pin="4" direction="input" />
+
+# devices
+  <button id="physical_button" gpio="$gpio4" pull_up="true" />
+
+# services

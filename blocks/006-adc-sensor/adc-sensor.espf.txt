@@ -1,0 +1,18 @@
+====================
+006 - ADC SENSOR AND FILTERS
+
+<adc> is proposed: espforge has no analog input element yet. The polling and
+the filters live in src/app.rs.
+====================
+
+# espforge
+  <project name="adc_sensor" />
+  <chip type="esp32" />
+  <runtime type="blocking" />
+
+# peripherals
+
+# devices
+  <adc id="battery_adc" pin="34" attenuation="11db" />
+
+# services

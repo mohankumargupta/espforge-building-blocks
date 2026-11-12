@@ -1,0 +1,15 @@
+====================
+001 - MINIMAL BOOT
+====================
+
+# espforge
+  <project name="minimal" description="Boot and log, nothing else" />
+  <chip type="esp32" />
+  <runtime type="blocking" />
+  <console type="uart" />
+
+# peripherals
+
+# devices
+
+# services

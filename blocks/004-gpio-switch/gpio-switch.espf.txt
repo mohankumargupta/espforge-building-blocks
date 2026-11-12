@@ -1,0 +1,16 @@
+====================
+004 - GPIO OUTPUT AND SWITCH
+====================
+
+# espforge
+  <project name="gpio_switch" />
+  <chip type="esp32" />
+  <runtime type="blocking" />
+
+# peripherals
+  <gpio id="gpio2" pin="2" direction="output" />
+
+# devices
+  <led id="onboard_led" gpio="$gpio2" />
+
+# services

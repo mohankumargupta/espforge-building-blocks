@@ -1,0 +1,20 @@
+====================
+009 - LOCAL AUTOMATIONS
+
+The trigger and action are Rust in src/app.rs; <led> stands in for the <light>
+of block 008, which is not implemented.
+====================
+
+# espforge
+  <project name="automations" />
+  <chip type="esp32" />
+  <runtime type="blocking" />
+
+# peripherals
+  <gpio id="gpio4" pin="4" direction="input" />
+
+# devices
+  <button id="wall_switch" gpio="$gpio4" pull_up="true" />
+  <led id="desk_lamp" pin="2" />
+
+# services

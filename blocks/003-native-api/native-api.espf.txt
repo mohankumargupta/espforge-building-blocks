@@ -1,0 +1,21 @@
+====================
+003 - NATIVE API
+
+The <api> element and the generated entity exposure it needs are proposals;
+the Wi-Fi half beneath it is already implemented.
+====================
+
+# espforge
+  <project name="native_api" />
+  <chip type="esp32" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+  <led id="onboard_led" pin="2" />
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <api id="api" network="$home" encryption.key="base64-encoded-key" />
