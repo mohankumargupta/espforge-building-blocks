@@ -4,7 +4,7 @@
 
 # espforge
   <project name="gpio_switch" />
-  <chip type="esp32" />
+  <chip type="esp32c3" />
   <runtime type="blocking" />
 
 # peripherals

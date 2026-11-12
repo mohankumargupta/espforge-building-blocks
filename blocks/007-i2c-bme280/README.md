@@ -8,8 +8,8 @@ today; `<bme280>` does not exist
 
 ```yaml
 i2c:
-  sda: GPIO21
-  scl: GPIO22
+  sda: GPIO4
+  scl: GPIO5
   scan: true
 
 sensor:
@@ -31,7 +31,7 @@ temperature and a humidity reading with independent names.
 
 | ESPHome | espforge |
 |---|---|
-| `i2c.sda/scl` | `<i2c id="i2c0" sda="21" scl="22" />` (declare `frequency` for a faster bus) |
+| `i2c.sda/scl` | `<i2c id="i2c0" sda="4" scl="5" />` (declare `frequency` for a faster bus) |
 | `i2c.scan: true` | none: bus scanning is an example (`i2c_scanner`), not a bus attribute |
 | `sensor: platform: bme280, address` | proposed `<bme280 id="climate" bus="$i2c0" address="0x76" />` |
 | `temperature.name` / `humidity.name` | one device handle returning both values; `name`s do not exist |
@@ -47,7 +47,7 @@ The bundled SCD4x driver is the same lego block (an I²C part with several
 readings, with an address fixed by the part):
 
 ```xml
-<i2c id="i2c0" sda="21" scl="22" frequency="100kHz" />
+<i2c id="i2c0" sda="4" scl="5" frequency="100kHz" />
 <scd4x id="climate" bus="$i2c0" address="0x62" />
 ```
 

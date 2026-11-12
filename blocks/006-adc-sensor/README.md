@@ -8,7 +8,7 @@
 ```yaml
 sensor:
   - platform: adc
-    pin: GPIO34
+    pin: GPIO4
     name: "Battery Voltage"
     update_interval: 10s
     filters:
@@ -27,7 +27,7 @@ over five samples before it is published.
 
 | ESPHome | espforge |
 |---|---|
-| `pin: GPIO34` | proposed `<adc id="battery_adc" pin="34" attenuation="11db" />` |
+| `pin: GPIO4` | proposed `<adc id="battery_adc" pin="4" attenuation="11db" />` |
 | `update_interval: 10s` | not declarative: a `delay_ms(10_000)` at the end of `forever` |
 | `filters: multiply` / `moving_average` | Rust arithmetic over repeated `read_millivolts()` calls |
 | `name:` | none; the `id` is the handle |

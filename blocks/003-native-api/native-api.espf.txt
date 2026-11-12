@@ -7,7 +7,7 @@ the Wi-Fi half beneath it is already implemented.
 
 # espforge
   <project name="native_api" />
-  <chip type="esp32" />
+  <chip type="esp32c3" />
   <runtime type="embassy" />
 
 # peripherals

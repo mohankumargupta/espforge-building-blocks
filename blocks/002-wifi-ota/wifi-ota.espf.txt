@@ -7,7 +7,7 @@ to build the Wi-Fi half with espforge today.
 
 # espforge
   <project name="wifi_ota" />
-  <chip type="esp32" />
+  <chip type="esp32c3" />
   <runtime type="embassy" />
 
 # peripherals

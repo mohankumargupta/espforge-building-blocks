@@ -9,7 +9,7 @@
 esphome:
   name: test-node
   platform: ESP32
-  board: esp32dev
+  board: esp32-c3-devkitm-1
 
 logger:
   level: DEBUG
@@ -25,7 +25,7 @@ logging at DEBUG. There is no hardware and no logic yet.
 | ESPHome | espforge |
 |---|---|
 | `esphome.name` | `<project name="minimal" />` (lowercased into the crate name) |
-| `platform: ESP32` + `board: esp32dev` | `<chip type="esp32" />` — espforge targets a chip, not a board |
+| `platform: ESP32` + `board: esp32-c3-devkitm-1` | `<chip type="esp32c3" />` — espforge targets a chip, not a board |
 | `logger.level: DEBUG` | no element: the generated `main()` installs esp-println's logger, and the level comes from `ESP_LOG` (e.g. `ESP_LOG=debug`) in the build environment |
 
 `src/app.rs` is the whole behaviour: log once in `setup`, idle in `forever`.

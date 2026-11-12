@@ -6,7 +6,7 @@ Both <pwm> and <light> are proposed; neither element exists yet.
 
 # espforge
   <project name="pwm_light" />
-  <chip type="esp32" />
+  <chip type="esp32c3" />
   <runtime type="blocking" />
 
 # peripherals

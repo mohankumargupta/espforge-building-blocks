@@ -7,12 +7,12 @@ the filters live in src/app.rs.
 
 # espforge
   <project name="adc_sensor" />
-  <chip type="esp32" />
+  <chip type="esp32c3" />
   <runtime type="blocking" />
 
 # peripherals
 
 # devices
-  <adc id="battery_adc" pin="34" attenuation="11db" />
+  <adc id="battery_adc" pin="4" attenuation="11db" />
 
 # services

@@ -22,5 +22,7 @@ check example:
 gen example:
     (cd {{ example }}; {{ espforge }} gen --out {{ build_dir }} --runtime-path {{ runtime }})
 
+build example:
+    (cd {{ example }}; {{ espforge }} build --out {{ build_dir }}/build --runtime-path {{ runtime }})
  
 

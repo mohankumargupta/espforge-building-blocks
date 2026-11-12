@@ -7,11 +7,11 @@ buildable version of this block uses <scd4x> instead (see README.md).
 
 # espforge
   <project name="i2c_bme280" />
-  <chip type="esp32" />
+  <chip type="esp32c3" />
   <runtime type="blocking" />
 
 # peripherals
-  <i2c id="i2c0" sda="21" scl="22" frequency="100kHz" />
+  <i2c id="i2c0" sda="4" scl="5" frequency="100kHz" />
 
 # devices
   <bme280 id="climate" bus="$i2c0" address="0x76" />

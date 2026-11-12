@@ -4,7 +4,7 @@
 
 # espforge
   <project name="minimal" description="Boot and log, nothing else" />
-  <chip type="esp32" />
+  <chip type="esp32c3" />
   <runtime type="blocking" />
   <console type="uart" />
 

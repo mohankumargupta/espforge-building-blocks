@@ -7,7 +7,7 @@ of block 008, which is not implemented.
 
 # espforge
   <project name="automations" />
-  <chip type="esp32" />
+  <chip type="esp32c3" />
   <runtime type="blocking" />
 
 # peripherals
