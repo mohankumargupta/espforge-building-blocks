@@ -19,3 +19,4 @@ endpoint, so src/app.rs is the transport.
 
 # services
   <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <http_client id="http" network="$home" rx_buffer_size="4096" timeout_ms="30000" />

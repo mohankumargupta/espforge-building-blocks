@@ -31,11 +31,12 @@ endpoint so later flashes go over the network instead of USB.
 
 `<ota />` is project-wide, not a service: it owns the A/B partition table and
 the `FLASH` peripheral, and the generated `Context` gains an `ota` handle.
-`src/app.rs` waits for the association and DHCP, then logs the address; the
-app drives an update itself with `ctx.ota` — `begin(size, crc32)`, `write(chunk)`,
-`progress()`, `finish()`, `reboot()` — fed by whatever transport it likes (the
-shipped `05.Networking/ota_update` example streams `<http_client>` chunks into
-it). The transport is the app because the block has no server side.
+`src/app.rs` waits for the association and DHCP, logs the address, confirms the
+slot, then streams `http://192.168.4.1:8000/blink.bin` through `<http_client>`
+into `ctx.ota` — `begin(size, crc32)`, `write(chunk)`, `progress()`, `finish()`,
+`reboot()`. `UPDATE_URL`, `IMAGE_SIZE` and `IMAGE_CRC32` in `app.rs` name the
+image; with `IMAGE_SIZE` at 0 the block only joins Wi-Fi. The transport is the
+app because the block has no server side.
 
 With `rollback="true"` (the default), a freshly updated image must call
 `ctx.ota.mark_app_valid()` once it is healthy, or the bootloader reverts it on
