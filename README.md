@@ -30,6 +30,8 @@ Every block's README opens with its status:
 
 ## Status
 
+40 of the 100 planned blocks are written: 6 ✅, 14 🟡, 20 ❌.
+
 | # | Block | ESPHome block | Status | What is missing today |
 |---|---|---|---|---|
 | 001 | [Minimal boot & serial logger](blocks/001-minimal/README.md) | `esphome`, `logger` | ✅ | — |
@@ -93,3 +95,24 @@ the missing protocol lives in `app.rs` — with the caveat that polling replaces
 input capture and the PN532 driver is hand-written. The ❌ blocks need a
 hardware peripheral (RMT for IR, LEDC for tones and fan speed) or a compiler
 feature (packages), not just a driver.
+
+## Roadmap: blocks 041–100
+
+`blocks/` stops at 040. The remaining 60 blocks are planned in one file per
+phase at the repository root. They are proposals, not projects: there is no
+`blocks/041-*` directory, and none of them has an `.espf.txt` or `app.rs` to
+check.
+
+| File | Blocks | Theme |
+|---|---|---|
+| [`41to50.md`](41to50.md) | 041–050 | I²S microphone and speaker, TWAI/CAN, stepper profiling, HX711, INA226, RGBWW, BLE proxy, scripts, Improv serial |
+| [`51to60.md`](51to60.md) | 051–060 | PID loop, e-paper, I²C port expander, mmWave radar, VOC index, Wiegand, webhooks, sun tracking, BLE HID, WireGuard |
+| [`61to70.md`](61to70.md) | 061–070 | NMEA GPS, LED strip zones, DFPlayer, AC phase cutting, multi-click, DS3231 RTC, SD card/FAT32, display menus, iBeacon, syslog |
+| [`71to80.md`](71to80.md) | 071–080 | MPU-6050, energy monitoring, H-bridge, PMS5003, VL53L0X, TM1637, LED matrix, humidity control, mDNS, SNMP |
+| [`81to90.md`](81to90.md) | 081–090 | Geiger counter, BH1750, soil moisture, irrigation, tachometer, HD44780, status LED, PIR, ICMP ping, alarm panel |
+| [`91to100.md`](91to100.md) | 091–100 | AS5600, MAX31865, TCS34725, safety cover, DMX512, latching valves, BLE GATT server, factory reset, OTA rollback, capstone |
+
+Each phase leans on elements the status table already calls missing — ADC
+(006), LEDC/PWM (008, 033, 036), RMT (015, 031), deep sleep (018), packages
+(040) — so the roadmap is the same vocabulary continued into audio, automotive
+buses and stage lighting rather than a different project.
