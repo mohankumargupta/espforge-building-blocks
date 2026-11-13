@@ -2,8 +2,8 @@ use crate::{service, Context};
 use embassy_executor::Spawner;
 
 /// Runs once at startup: wait for association and DHCP, then report the
-/// address. OTA, once it exists, would be a service started by the runtime and
-/// would add no code here.
+/// address. `<ota />` only owns partitions and the updater; an update is the
+/// app's job (fetch an image into `ctx.ota`), so this block does none.
 pub async fn setup(ctx: &'static Context, _spawner: Spawner) {
     let logger = ctx.logger;
     let station = service!(ctx, home);

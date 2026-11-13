@@ -82,8 +82,8 @@ Every block's README opens with its status:
 per-subsystem levels (`drivers`, `network`, `hal`) and strips logging from flash
 at `level="none"`, and `<ota />`, which adds A/B partitions, rollback and
 `ctx.ota` (the app feeds it downloaded chunks, so the transport is up to you).
-Blocks 001 and 002 predate both and still show the older `ESP_LOG`-only and
-proposed `<ota>` service forms.
+Block 001 predates `<logger>` and still shows the `ESP_LOG`-only form; block 002
+uses the real `<ota />`, with the download left to `app.rs`.
 
 Blocks 011–020 move from pins and buses to provisioning, services and power.
 The 🟡 blocks run today with the missing half written as Rust in `app.rs`

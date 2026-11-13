@@ -1,14 +1,16 @@
 ====================
 002 - WIFI AND OTA
 
-Wi-Fi is real; <ota> is the proposed element for this block. Remove that line
-to build the Wi-Fi half with espforge today.
+Wi-Fi and <ota /> are both real. <ota /> lives in # espforge: it adds the
+two-slot partition table, bootloader rollback and ctx.ota. There is no upload
+endpoint, so src/app.rs is the transport.
 ====================
 
 # espforge
   <project name="wifi_ota" />
   <chip type="esp32c3" />
   <runtime type="embassy" />
+  <ota />
 
 # peripherals
   <wifi id="radio" />
@@ -17,4 +19,3 @@ to build the Wi-Fi half with espforge today.
 
 # services
   <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
-  <ota id="ota" password="admin" />

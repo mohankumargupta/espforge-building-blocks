@@ -1,14 +1,16 @@
 ====================
 039 - BOOT LOOP DETECTION AND SAFE MODE RECOVERY
 
-<safe_mode> is a proposal. Wi-Fi is real, but there is no RTC-memory boot
-counter, no boot deadline, no fallback AP and no OTA to recover into.
+<safe_mode> is a proposal. Wi-Fi is real and <ota /> (block 002) gives recovery
+a target, but there is no RTC-memory boot counter, no boot deadline and no
+fallback AP to enter safe mode with.
 ====================
 
 # espforge
   <project name="safe_mode" />
   <chip type="esp32c3" />
   <runtime type="embassy" />
+  <ota />
 
 # peripherals
   <wifi id="radio" />

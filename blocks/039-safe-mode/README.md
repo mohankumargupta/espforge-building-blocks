@@ -29,7 +29,7 @@ of rebooting forever.
 | RTC-memory boot counter | none: no persistent counter across resets |
 | `reboot_timeout` | none: no boot watchdog timestamp |
 | fallback AP | none: block 012 has no AP mode or DNS responder |
-| `ota: safe_mode` | none: block 002 has no OTA service at all |
+| `ota: safe_mode` | none: `<ota />` (block 002) supplies a recovery target and rollback, but nothing can enter safe mode or serve the upload |
 | logging the decision | `ctx.logger` is the only signal today |
 | `name:` | none |
 
@@ -40,5 +40,7 @@ it would always read zero.
 ### What is missing
 
 An RTC-memory counter with an increment-at-boot and clear-on-healthy policy, a
-boot deadline, an AP/OTA fallback, and a reset path. This block depends on
-blocks 002 (OTA) and 012 (captive portal) before it can mean anything.
+boot deadline, an AP/OTA fallback, and a reset path. Block 002's `<ota />` now
+supplies the second half — A/B slots, rollback and `ctx.ota.mark_app_valid()` as
+the healthy signal — so what remains is the decision itself, plus block 012's
+AP to serve the recovery upload.
