@@ -25,4 +25,5 @@ gen example:
 build example:
     (cd {{ example }}; {{ espforge }} build --out {{ build_dir }}/build --runtime-path {{ runtime }})
  
-
+esp-emu args:
+    esp-emu {{ args }}   
