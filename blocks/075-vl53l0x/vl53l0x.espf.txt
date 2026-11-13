@@ -1,0 +1,21 @@
+====================
+075 - I2C TIME-OF-FLIGHT LASER DISTANCE RANGING (VL53L0X)
+
+<vl53l0x> is a proposal. The bus and the XSHUT pin are real, but the part needs
+dozens of tuning writes and a reference calibration before it reports a range,
+so this is a driver, not app.rs framing.
+====================
+
+# espforge
+  <project name="vl53l0x" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="400kHz" />
+
+# devices
+  <led id="tof_xshut" pin="2" />
+  <vl53l0x id="tank_level" bus="$i2c0" address="0x29" enable="$tof_xshut" range_profile="long" />
+
+# services

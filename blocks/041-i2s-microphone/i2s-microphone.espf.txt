@@ -1,0 +1,19 @@
+====================
+041 - I2S DIGITAL MICROPHONE AND PCM STREAMING
+
+<i2s> and <microphone> are proposals. There is no I2S peripheral, no DMA ring
+and no audio entity; app.rs only shows the intended per-chunk read.
+====================
+
+# espforge
+  <project name="i2s_microphone" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2s id="mic_bus" lrclk="4" bclk="5" din="6" rate="16000Hz" />
+
+# devices
+  <microphone id="digital_mic" i2s="$mic_bus" channels="mono" />
+
+# services

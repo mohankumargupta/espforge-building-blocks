@@ -1,0 +1,18 @@
+====================
+093 - I2C OPTICAL COLOR SENSING AND CHROMATICITY (TCS34725)
+
+No <tcs34725> driver: the bus is real, app.rs writes the gain and integration
+registers, reads the eight-byte RGBC result, and computes lux and a McCamy
+colour temperature.
+====================
+
+# espforge
+  <project name="tcs34725_color" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="400kHz" />
+
+# devices
+# services

@@ -1,0 +1,19 @@
+====================
+053 - I2C GPIO PORT EXPANDER AND HARDWARE INTERRUPTS
+
+<pcf8574> is a proposal, but the bus is real and the part has no registers:
+app.rs keeps the latch byte and writes it to 0x20. Relay 1 is bit 0, inverted.
+====================
+
+# espforge
+  <project name="pcf8574_expander" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="100kHz" />
+
+# devices
+  <pcf8574 id="expander" bus="$i2c0" address="0x20" int="3" />
+
+# services

@@ -1,0 +1,18 @@
+====================
+066 - BATTERY-BACKED I2C REAL-TIME CLOCK (DS3231)
+
+No <ds3231> time source: the bus is real and app.rs reads the BCD registers
+directly and decodes them. Runs with no Wi-Fi at all, which is the point of an
+RTC next to block 011's SNTP.
+====================
+
+# espforge
+  <project name="ds3231_rtc" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="100kHz" />
+
+# devices
+# services

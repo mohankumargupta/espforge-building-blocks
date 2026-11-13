@@ -1,0 +1,21 @@
+====================
+087 - HARDWARE STATUS LED AND RUNTIME LIFE-CYCLE SIGNALING
+
+No <status_led> element: the LED is a plain <led> and the cadence is a
+non-blocking state machine in app.rs. <wifi_station> supplies the real link
+state, so the pattern tracks something that actually happens.
+====================
+
+# espforge
+  <project name="status_led" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+  <led id="status_led" pin="3" />
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />

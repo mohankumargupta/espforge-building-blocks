@@ -1,0 +1,19 @@
+====================
+048 - HOME ASSISTANT BLUETOOTH PROXY FORWARDING
+
+<ble> and <bluetooth_proxy> are proposals. The proxy forwards raw HCI frames,
+so it needs the BLE controller (block 026/038) and the native API transport
+(block 003), neither of which exists.
+====================
+
+# espforge
+  <project name="ble_proxy" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <ble id="radio" />
+
+# devices
+# services
+  <bluetooth_proxy id="proxy" ble="$radio" active="true" connections="3" />

@@ -1,0 +1,19 @@
+====================
+076 - 7-SEGMENT 4-DIGIT SERIAL DISPLAY (TM1637)
+
+No <tm1637> driver: CLK and DIO are <led> outputs and app.rs bit-bangs the
+start/stop conditions and the LSB-first bytes. Two <led>s are write-only, so
+the acknowledge bit is skipped.
+====================
+
+# espforge
+  <project name="tm1637_display" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <led id="tm_clk" pin="2" />
+  <led id="tm_dio" pin="3" />
+
+# services

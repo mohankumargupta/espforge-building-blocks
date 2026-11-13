@@ -1,0 +1,19 @@
+====================
+089 - ICMP NETWORK PING AND HOST PRESENCE WATCHDOG
+
+<ping> is a proposal: the runtime exposes TCP clients only, so there is no ICMP
+socket and no RTT to measure. The Wi-Fi stack it would ride is real.
+====================
+
+# espforge
+  <project name="ping" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <ping id="gateway" network="$home" host="192.168.1.1" timeout_ms="1000" icon="gateway" />

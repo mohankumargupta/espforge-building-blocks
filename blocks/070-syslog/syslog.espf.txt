@@ -1,0 +1,21 @@
+====================
+070 - UDP SYSLOG REMOTE DIAGNOSTIC STREAMING
+
+<syslog> is a proposal. Two things are missing: a UDP socket and a logger sink
+that duplicates records next to esp-println. <logger> already owns filtering,
+so the sink belongs there rather than in a separate service.
+====================
+
+# espforge
+  <project name="syslog" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+  <logger level="debug" network="warn" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <syslog id="collector" network="$home" host="192.168.1.50" port="514" facility="LOCAL0" />

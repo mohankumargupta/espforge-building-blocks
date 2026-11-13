@@ -1,0 +1,20 @@
+====================
+078 - CLOSED-LOOP HUMIDIFIER AND DEHUMIDIFIER CONTROLLER
+
+No <humidifier> entity: the deadband, the target and the minimum off time are
+Rust over a real <scd4x> humidity reading and an <led> relay. Runs offline.
+====================
+
+# espforge
+  <project name="humidifier" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="100kHz" />
+
+# devices
+  <scd4x id="air" bus="$i2c0" address="0x62" />
+  <led id="mist_generator" pin="3" />
+
+# services

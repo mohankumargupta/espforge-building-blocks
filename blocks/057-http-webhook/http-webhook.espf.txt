@@ -1,0 +1,21 @@
+====================
+057 - OUTBOUND HTTP CLIENT AND WEBHOOK TELEMETRY
+
+<http_client> is real: it carries the POST over the <wifi_station> stack, with
+its own buffers and timeout. The button edge and the JSON body are app.rs.
+====================
+
+# espforge
+  <project name="http_webhook" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+  <button id="panic_button" pin="3" pull_up="true" />
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <http_client id="webhook" network="$home" rx_buffer_size="1024" tx_buffer_size="512" timeout_ms="5000" />

@@ -1,0 +1,20 @@
+====================
+086 - I2C CHARACTER LCD MATRIX (HD44780 + PCF8574 BACKPACK)
+
+No <lcd_pcf8574> driver: the bus is real and app.rs drives the backpack's
+enable strobe by hand, four bits at a time. The temperature line reads a real
+<scd4x>.
+====================
+
+# espforge
+  <project name="lcd_pcf8574" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="100kHz" />
+
+# devices
+  <scd4x id="air" bus="$i2c0" address="0x62" />
+
+# services

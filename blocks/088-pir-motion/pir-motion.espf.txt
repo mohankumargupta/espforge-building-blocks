@@ -1,0 +1,19 @@
+====================
+088 - PIR PASSIVE INFRARED MOTION AND REFRACTORY FILTERING
+
+No declarative filters: a real <button> input is sampled and delayed_off is a
+retriggerable hold in app.rs. The state is logged on transitions only, so
+thirty seconds of motion is two lines.
+====================
+
+# espforge
+  <project name="pir_motion" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <button id="hallway_pir" pin="2" />
+  <led id="hall_light" pin="3" />
+
+# services

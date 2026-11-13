@@ -1,0 +1,19 @@
+====================
+077 - 2D ADDRESSABLE LED MATRIX DISPLAY ENGINE
+
+<led_strip> and <matrix> are proposals: no RMT channel, no colour framebuffer,
+no font renderer for it. The serpentine pixel mapping is trivial arithmetic
+that only becomes interesting once the strip exists.
+====================
+
+# espforge
+  <project name="led_matrix" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <led_strip id="panel_strip" pin="3" leds="256" chipset="ws2812" order="GRB" />
+  <matrix id="panel" strip="$panel_strip" width="16" height="16" layout="serpentine" />
+
+# services

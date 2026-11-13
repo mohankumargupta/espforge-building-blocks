@@ -1,0 +1,20 @@
+====================
+060 - WIREGUARD ENCRYPTED VPN OVERLAY TUNNEL
+
+<wireguard> is a proposal, and it needs two things the runtime lacks: a UDP
+socket to handshake over and the Curve25519/ChaCha20-Poly1305 crypto. Keys
+would be sourced like <wifi_station password>, never written literally.
+====================
+
+# espforge
+  <project name="wireguard" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <wireguard id="tunnel" network="$home" address="10.0.0.15" peer="vpn.myhome.net:51820" allowed_ips="10.0.0.0/24" private_key="env:WG_PRIVATE_KEY" peer_public_key="env:WG_PEER_KEY" />

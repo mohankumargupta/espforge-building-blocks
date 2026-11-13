@@ -1,0 +1,21 @@
+====================
+085 - 4-WIRE TACHOMETER FAN AND CLOSED-LOOP RPM SENSING
+
+<pwm> and <pcnt> are both proposals. The drive needs 25 kHz and the tach is
+100 Hz at 3000 RPM, so neither software timing nor polling can substitute.
+The two inputs/outputs are ordinary C3 pins.
+====================
+
+# espforge
+  <project name="tach_fan" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <pcnt id="tach_counter" pin="7" pull_up="true" />
+
+# devices
+  <pwm id="fan_drive" pin="6" frequency="25kHz" resolution="8bit" />
+  <speed_fan id="chassis" output="$fan_drive" tach="$tach_counter" />
+
+# services

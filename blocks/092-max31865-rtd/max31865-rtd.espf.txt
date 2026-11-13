@@ -1,0 +1,18 @@
+====================
+092 - HIGH-PRECISION PLATINUM RTD TEMPERATURE (MAX31865)
+
+No <max31865> driver: the SPI bus is real and app.rs reads the 15-bit RTD
+register, checks the fault bit, and runs the Callendar-Van Dusen conversion
+for a PT100. SPI mode 1 is required by the part.
+====================
+
+# espforge
+  <project name="max31865_rtd" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <spi id="spi2" sclk="6" mosi="7" miso="2" mode="1" frequency="1000kHz" cs="10" />
+
+# devices
+# services

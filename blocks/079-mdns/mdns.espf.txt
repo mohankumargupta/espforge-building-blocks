@@ -1,0 +1,21 @@
+====================
+079 - MULTICAST DNS (MDNS) AND CUSTOM ZEROCONF DISCOVERY
+
+<mdns> and <mdns_service> are proposals. The network stack has multicast and
+UDP, so this is runtime work: a socket on 5353 joined to 224.0.0.251, plus a
+DNS message encoder and a DNS-SD registry.
+====================
+
+# espforge
+  <project name="mdns" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <mdns id="names" network="$home" hostname="sensor-node" />
+  <mdns_service service="_custom_sensor" protocol="_tcp" port="8080" txt="version=1.0.0,chip=esp32c3" />

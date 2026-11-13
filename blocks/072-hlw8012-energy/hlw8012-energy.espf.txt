@@ -1,0 +1,21 @@
+====================
+072 - DUAL-MODE FREQUENCY ENERGY MONITOR (HLW8012 / BL0937)
+
+The three pins are ordinary GPIO, but mains power means a CF frequency in the
+kilohertz: polling cannot count it. <pcnt> is the missing primitive, shared
+with blocks 017, 081 and 085. The SEL toggle is real.
+====================
+
+# espforge
+  <project name="hlw8012_energy" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <pcnt id="cf_counter" pin="3" />
+  <pcnt id="cf1_counter" pin="4" />
+
+# devices
+  <led id="sel" pin="2" />
+
+# services

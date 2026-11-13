@@ -1,0 +1,22 @@
+====================
+058 - ASTRONOMICAL SUN TRACKING AND CELESTIAL TRIGGERS
+
+No <sun> element: <ntp> supplies UTC and app.rs does the solar geometry, using
+an elevation of -4 degrees (civil twilight) as the sunset event. The porch
+light is a real <led>.
+====================
+
+# espforge
+  <project name="sun_tracking" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+  <led id="porch_light" pin="3" />
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <ntp id="clock" network="$home" />

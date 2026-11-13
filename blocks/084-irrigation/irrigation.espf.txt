@@ -1,0 +1,22 @@
+====================
+084 - MULTI-ZONE SPRINKLER AND IRRIGATION VALVE CONTROLLER
+
+No <sprinkler> entity: three <led> relays sequence the zones in app.rs, with
+one zone open at a time and a master valve that follows. Cycled by a countdown
+so the block finishes a full 45 minute run without blocking.
+====================
+
+# espforge
+  <project name="irrigation" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <led id="master_valve" pin="5" />
+  <led id="zone1_valve" pin="6" />
+  <led id="zone2_valve" pin="7" />
+  <led id="zone3_valve" pin="10" />
+  <button id="rain_sensor" pin="4" pull_up="true" />
+
+# services

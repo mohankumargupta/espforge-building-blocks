@@ -1,0 +1,24 @@
+====================
+067 - REMOVABLE SPI SD CARD AND FAT32 TELEMETRY LOGGING
+
+The <spi> bus is real, but <sd_card> is a proposal: there is no block-device
+driver for the card's SPI protocol and no FAT filesystem above it. One without
+the other logs nothing.
+====================
+
+# espforge
+  <project name="sd_card_logging" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <spi id="spi2" sclk="6" mosi="7" miso="2" mode="0" frequency="4000kHz" />
+  <wifi id="radio" />
+
+# devices
+  <sd_card id="sd_logger" bus="$spi2" cs="10" />
+  <scd4x id="air" bus="$i2c0" address="0x62" />
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <ntp id="clock" network="$home" />

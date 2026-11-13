@@ -1,0 +1,20 @@
+====================
+056 - WIEGAND PROTOCOL DUAL-WIRE ACCESS KEYPAD / RFID
+
+<wiegand> is a proposal. A Wiegand bit is a 50-100 us pulse, so polling cannot
+see it: this needs edge capture with microsecond timestamps, the same missing
+primitive as the block 017 pulse counter. The door latch is a real <led>.
+====================
+
+# espforge
+  <project name="wiegand" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <wiegand id="reader" d0="2" d1="3" />
+  <wiegand_key id="master_card" reader="$reader" code="0x123456" />
+  <led id="door_latch" pin="10" />
+
+# services

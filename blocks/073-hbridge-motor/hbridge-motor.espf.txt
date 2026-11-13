@@ -1,0 +1,20 @@
+====================
+073 - H-BRIDGE DC MOTOR ACTUATOR AND DYNAMIC BRAKING
+
+Both <pwm> outputs and <hbridge> are proposals. There is no LEDC and no bridge
+driver, so the dead-time interlock and the decay mode have nowhere to live; a
+pair of <led> pins could only do full speed and brake.
+====================
+
+# espforge
+  <project name="hbridge_motor" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <pwm id="motor_in1" pin="6" frequency="20kHz" resolution="10bit" />
+  <pwm id="motor_in2" pin="7" frequency="20kHz" resolution="10bit" />
+  <hbridge id="conveyor" pin_a="$motor_in1" pin_b="$motor_in2" decay_mode="slow" />
+
+# services

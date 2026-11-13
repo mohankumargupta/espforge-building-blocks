@@ -1,0 +1,18 @@
+====================
+074 - LASER PARTICULATE AIR QUALITY SENSOR (PMS5003)
+
+No <pmsx003> driver: UART1 is real and app.rs syncs on the 0x424D magic,
+checks the 30-byte sum, and decodes the three atmospheric concentrations from
+the 32-byte frame. GPIO20/21 are UART0, so the sensor moves to GPIO0/1.
+====================
+
+# espforge
+  <project name="pms5003" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <uart id="uart1" uart="UART1" tx="0" rx="1" baud_rate="9600" />
+
+# devices
+# services

@@ -1,0 +1,20 @@
+====================
+098 - MULTI-STAGE FACTORY RESET AND NVS WIPE RECOVERY
+
+The hold timer and the LED feedback are real; the wipe is not. There is no NVS
+API (block 019) and no plain reset, so the second band cannot erase anything.
+Reboot uses <ota />'s handle, hence <ota /> here.
+====================
+
+# espforge
+  <project name="factory_reset" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+  <ota />
+
+# peripherals
+# devices
+  <button id="recovery_button" pin="9" pull_up="true" />
+  <led id="status_led" pin="3" />
+
+# services

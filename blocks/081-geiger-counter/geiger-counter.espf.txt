@@ -1,0 +1,20 @@
+====================
+081 - RADIATION PULSE COUNTER AND GEIGER-MULLER TUBE (CPM TO uSv/h)
+
+No <pulse_counter> and no PCNT: the tube output is a pulled-up <button> sampled
+every millisecond, counted over a 10 s window and scaled to CPM. A 100 us pulse
+can slip between samples; a hardware counter would not.
+====================
+
+# espforge
+  <project name="geiger_counter" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <gpio id="gpio4" pin="4" direction="input" />
+
+# devices
+  <button id="geiger_pulse" gpio="$gpio4" pull_up="true" />
+
+# services

@@ -1,0 +1,23 @@
+====================
+099 - FIRMWARE SELF-DIAGNOSTIC AND AUTOMATED OTA ROLLBACK
+
+<ota /> is real: it generates the ota_0/ota_1 partition table, and
+ctx.ota.mark_app_valid() confirms the running slot. The health check that
+precedes the confirmation is the interesting part, and <wifi_station> supplies
+it.
+====================
+
+# espforge
+  <project name="ota_rollback" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+  <ota rollback="true" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+  <led id="status_led" pin="3" />
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />

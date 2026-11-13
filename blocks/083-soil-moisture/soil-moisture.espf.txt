@@ -1,0 +1,20 @@
+====================
+083 - SOIL MOISTURE CAPACITIVE PROBING AND PIECEWISE CALIBRATION
+
+<adc> does not exist: # peripherals has gpio, i2c, spi, uart and wifi only.
+The two-point calibration and the clamp are in app.rs, but nothing produces a
+voltage for them. ADC2 is also shared with the Wi-Fi radio on the C3.
+====================
+
+# espforge
+  <project name="soil_moisture" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <adc id="adc1" attenuation="11dB" resolution="12bit" />
+
+# devices
+  <analog_sensor id="soil" adc="$adc1" channel="0" />
+
+# services

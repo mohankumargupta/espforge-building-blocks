@@ -1,0 +1,25 @@
+====================
+080 - SNMP MANAGEMENT AGENT AND OID TELEMETRY PROVIDER
+
+<snmp> and <snmp_object> are proposals. The sensor values are real, but the
+protocol is not: no UDP server, no ASN.1 BER codec and no ordered OID table
+for GETNEXT.
+====================
+
+# espforge
+  <project name="snmp" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="100kHz" />
+  <wifi id="radio" />
+
+# devices
+  <scd4x id="air" bus="$i2c0" address="0x62" />
+  <button id="battery_voltage" pin="4" />
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <snmp id="agent" network="$home" community="public" contact="admin@myhome.net" location="Rack 1" />
+  <snmp_object oid="1.3.6.1.4.1.53864.1.1.0" sensor="$air" />

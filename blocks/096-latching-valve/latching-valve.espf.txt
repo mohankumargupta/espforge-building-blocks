@@ -1,0 +1,19 @@
+====================
+096 - BI-STABLE LATCHING SOLENOID PULSE DRIVER
+
+No <switch> entity: the two coils are real <led> outputs and the 75 ms pulse
+pair is in app.rs. The valve stays where the last pulse put it, so the latched
+state lives in a static.
+====================
+
+# espforge
+  <project name="latching_valve" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <led id="pulse_forward" pin="0" />
+  <led id="pulse_reverse" pin="1" />
+
+# services

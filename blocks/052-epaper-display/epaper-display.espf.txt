@@ -1,0 +1,20 @@
+====================
+052 - SPI ELECTRONIC PAPER DISPLAY AND PARTIAL REFRESH
+
+The <spi> bus is real and write-only. <epaper> is a proposal: an init table,
+two waveform LUTs, BUSY polling and a framebuffer are a driver, not app.rs
+framing.
+====================
+
+# espforge
+  <project name="epaper_display" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <spi id="spi2" sclk="6" mosi="7" mode="0" frequency="4000kHz" />
+
+# devices
+  <epaper id="panel" bus="$spi2" model="2.9in" cs="10" dc="2" reset="3" busy="4" />
+
+# services

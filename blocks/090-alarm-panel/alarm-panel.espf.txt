@@ -1,0 +1,22 @@
+====================
+090 - SECURITY ALARM CONTROL PANEL AND PARTITION STATE MACHINE
+
+No <alarm_control_panel> entity: the state machine, the exit/entry delays and
+the siren interlock are Rust in app.rs over three real <button> inputs and one
+<led> siren. The PIN is three taps on the disarm button.
+====================
+
+# espforge
+  <project name="alarm_panel" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <button id="arm_away" pin="4" pull_up="true" />
+  <button id="arm_home" pin="5" pull_up="true" />
+  <button id="disarm" pin="6" pull_up="true" />
+  <button id="entry_pir" pin="7" />
+  <led id="siren_relay" pin="10" />
+
+# services

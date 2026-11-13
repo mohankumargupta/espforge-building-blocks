@@ -1,0 +1,23 @@
+====================
+047 - 5-CHANNEL RGBWW AND COLOR TEMPERATURE BLENDING
+
+<pwm> and <light> are proposals: there is no LEDC output and no light entity,
+so five channels and their mireds blend have nowhere to go. app.rs holds the
+real part, the RGB-to-RGBWW and gamma arithmetic.
+====================
+
+# espforge
+  <project name="rgbww_light" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <pwm id="out_r" pin="0" frequency="1kHz" resolution="10bit" />
+  <pwm id="out_g" pin="1" frequency="1kHz" resolution="10bit" />
+  <pwm id="out_b" pin="2" frequency="1kHz" resolution="10bit" />
+  <pwm id="out_cw" pin="3" frequency="1kHz" resolution="10bit" />
+  <pwm id="out_ww" pin="10" frequency="1kHz" resolution="10bit" />
+  <light id="ceiling" kind="rgbww" red="$out_r" green="$out_g" blue="$out_b" cold_white="$out_cw" warm_white="$out_ww" />
+
+# services

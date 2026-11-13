@@ -1,0 +1,19 @@
+====================
+069 - BLE IBEACON PROXIMITY BROADCASTING
+
+<ble_beacon> is a proposal: the iBeacon payload is a fixed 25-byte array, so
+the only missing capability is a <ble> radio that can advertise it in
+broadcaster mode.
+====================
+
+# espforge
+  <project name="ble_ibeacon" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <ble id="radio" role="broadcaster" />
+
+# devices
+# services
+  <ble_beacon id="beacon" ble="$radio" kind="ibeacon" uuid="e2c56db5-dffb-48d2-b060-d0f5a71096e0" major="100" minor="1" tx_power="-59" />

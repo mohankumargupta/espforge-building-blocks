@@ -1,0 +1,21 @@
+====================
+043 - TWAI / CAN BUS CONTROLLER AND IDENTIFIER FILTERING
+
+<twai> and <can_listener> are proposals: the C3's ISO 11898 controller is not
+modelled, so there is no bit timing, no acceptance mask and no frame API.
+The relay on the receiving side is a real <led>.
+====================
+
+# espforge
+  <project name="twai_can" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <twai id="can" tx="6" rx="7" bitrate="500kbps" />
+
+# devices
+  <led id="auxiliary_relay" pin="10" />
+
+# services
+  <can_listener id="aux_frames" can="$can" can_id="0x200" />

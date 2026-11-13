@@ -1,0 +1,17 @@
+====================
+091 - CONTACTLESS MAGNETIC ROTARY ANGLE ENCODER (AS5600)
+
+No <as5600> driver: the bus is real and app.rs reads the 12-bit raw angle from
+0x0E/0x0F and the magnet-status register, then converts counts to degrees.
+====================
+
+# espforge
+  <project name="as5600_angle" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="400kHz" />
+
+# devices
+# services

@@ -1,0 +1,18 @@
+====================
+061 - NMEA 0183 GPS POSITIONING AND SENTENCE DECODING
+
+No <gps> driver: UART1 is real and app.rs reads lines, verifies the NMEA XOR
+checksum, and decodes $GPRMC position plus $GPGGA altitude and satellites.
+GPIO20/21 are UART0 (the console), so the module moves to GPIO0/1.
+====================
+
+# espforge
+  <project name="gps_nmea" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <uart id="uart1" uart="UART1" tx="0" rx="1" baud_rate="9600" />
+
+# devices
+# services

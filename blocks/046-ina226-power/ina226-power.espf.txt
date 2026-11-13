@@ -1,0 +1,18 @@
+====================
+046 - HIGH-PRECISION I2C SHUNT POWER MONITOR (INA226)
+
+The bus is real: <i2c> plus raw write/read reaches the part at 0x40. There is
+no <ina226> driver, so config, calibration and the register scaling live in
+app.rs.
+====================
+
+# espforge
+  <project name="ina226_power" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="400kHz" />
+
+# devices
+# services

@@ -1,0 +1,18 @@
+====================
+082 - HIGH DYNAMIC RANGE I2C AMBIENT LIGHT SENSOR (BH1750)
+
+No <bh1750> driver: the bus is real, one command byte starts continuous
+high-resolution measurement at 0x23, and app.rs divides the 16-bit result by
+1.2 for lux.
+====================
+
+# espforge
+  <project name="bh1750_illuminance" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="100kHz" />
+
+# devices
+# services

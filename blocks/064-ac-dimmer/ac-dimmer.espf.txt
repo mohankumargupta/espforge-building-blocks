@@ -1,0 +1,20 @@
+====================
+064 - AC PHASE-CUTTING DIMMER AND ZERO-CROSS TRIAC TIMING
+
+<ac_dimmer> is a proposal. A late gate strobe is flicker; an early one fires
+before commutation. Neither timestamped zero-cross capture nor a microsecond
+one-shot exists, so unlike the servo in block 021 software timing is no
+substitute here.
+====================
+
+# espforge
+  <project name="ac_dimmer" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <ac_dimmer id="dimmer" gate="3" zero_cross="2" frequency="50Hz" />
+  <monochromatic_light id="chandelier" output="$dimmer" />
+
+# services

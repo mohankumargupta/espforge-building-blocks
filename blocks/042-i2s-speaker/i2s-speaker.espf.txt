@@ -1,0 +1,19 @@
+====================
+042 - I2S AUDIO OUTPUT AND NETWORK MEDIA PLAYER
+
+<i2s> in TX mode and <media_player> are proposals. The C3 has no internal DAC,
+so both the transmitter and the entity that feeds it are missing.
+====================
+
+# espforge
+  <project name="i2s_speaker" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <i2s id="spk_bus" lrclk="4" bclk="5" dout="7" rate="16000Hz" />
+
+# devices
+  <media_player id="speaker" i2s="$spk_bus" channels="mono" />
+
+# services

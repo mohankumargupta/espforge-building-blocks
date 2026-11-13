@@ -1,0 +1,19 @@
+====================
+044 - STEPPER MOTOR AND TRAPEZOIDAL ACCELERATION PROFILING
+
+The two A4988 pins are ordinary GPIO: STEP is an <led> pulse, DIR is a level.
+app.rs computes the trapezoid and times each pulse with delay_ns, so the move
+runs in the foreground. A hardware pulse engine is still a proposal.
+====================
+
+# espforge
+  <project name="stepper_motor" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <led id="step" pin="3" />
+  <led id="dir" pin="2" />
+
+# services

@@ -1,0 +1,20 @@
+====================
+065 - COMPLEX MULTI-CLICK PATTERN DISCRIMINATION ENGINE
+
+No on_multi_click: the discriminator is a sampled state machine in app.rs over
+a real pulled-up <button>. The bounds are the YAML's own timing list, and the
+long press fires while the button is still held.
+====================
+
+# espforge
+  <project name="multi_click" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <gpio id="gpio4" pin="4" direction="input" />
+
+# devices
+  <button id="multifunction_button" gpio="$gpio4" pull_up="true" />
+
+# services

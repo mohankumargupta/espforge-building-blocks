@@ -1,0 +1,19 @@
+====================
+045 - 24-BIT STRAIN GAUGE (HX711) AND WEIGHT CALIBRATION
+
+No <hx711> driver: DOUT is a <button>, SCK is an <led>, and app.rs clocks the
+24-bit conversion out by hand, then applies tare and two-point calibration.
+GPIO2 is a C3 strapping pin, hence the expected check warning.
+====================
+
+# espforge
+  <project name="hx711_scale" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <led id="sck" pin="2" />
+  <button id="dout" pin="3" />
+
+# services

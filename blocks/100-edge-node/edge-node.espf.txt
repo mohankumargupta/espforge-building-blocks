@@ -1,0 +1,27 @@
+====================
+100 - THE RESILIENT EDGE NODE: UNIFIED ARCHITECTURAL CONVERGENCE
+
+The capstone uses only implemented elements: an <i2c> bus with a real <scd4x>,
+an <ssd1306> panel, an <led> vent relay, <wifi_station> for the link and <ntp>
+for the clock. The over-temperature vent runs locally, so the node is useful
+with or without Home Assistant.
+====================
+
+# espforge
+  <project name="edge_node" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+  <logger level="info" network="warn" />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="400kHz" />
+  <wifi id="radio" />
+
+# devices
+  <scd4x id="air" bus="$i2c0" address="0x62" />
+  <ssd1306 id="oled" bus="$i2c0" address="0x3C" size="128x64" />
+  <led id="emergency_vent" pin="2" />
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />
+  <ntp id="clock" network="$home" />

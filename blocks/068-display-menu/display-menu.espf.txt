@@ -1,0 +1,24 @@
+====================
+068 - INTERACTIVE DISPLAY MENU NAVIGATION ENGINE
+
+<display_menu> is a proposal, but everything it drives is real: an <ssd1306>
+framebuffer, two menu <button> inputs, an <led> backlight and <ota />'s
+reboot. The cursor and the redraw are ordinary Rust in app.rs.
+====================
+
+# espforge
+  <project name="display_menu" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+  <ota />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="400kHz" />
+
+# devices
+  <ssd1306 id="oled" bus="$i2c0" address="0x3C" size="128x64" />
+  <button id="menu_next" pin="4" pull_up="true" />
+  <button id="menu_enter" pin="5" pull_up="true" />
+  <led id="screen_backlight" pin="10" />
+
+# services

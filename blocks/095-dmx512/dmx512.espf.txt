@@ -1,0 +1,21 @@
+====================
+095 - DMX512 STAGE LIGHTING SERIAL UNIVERSE MASTER
+
+The UART is real, including 250000 baud and two stop bits, and so is the
+513-byte buffer. The BREAK and mark-after-break that delimit a DMX frame are
+not: the UART has no break primitive, and without it a receiver ignores the
+frame.
+====================
+
+# espforge
+  <project name="dmx512" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <uart id="uart1" uart="UART1" tx="0" rx="1" baud_rate="250000" stop_bits="2" />
+
+# devices
+# services
+  <dmx512 id="stage_dmx" uart="$uart1" />
+  <dmx_output id="spotlight" universe="$stage_dmx" channel="1" />

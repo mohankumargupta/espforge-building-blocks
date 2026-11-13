@@ -1,0 +1,24 @@
+====================
+094 - MOTORIZED GATE AND DUAL-ENDSTOP INTERLOCK SAFETY COVER
+
+No <cover> entity: two <led> relays and two limit <button>s carry the whole
+safety story in app.rs, with mutually exclusive relays, a 25 s travel timeout
+and an endstop that stops the motor early.
+====================
+
+# espforge
+  <project name="gate_cover" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <gpio id="gpio2" pin="2" direction="input" />
+  <gpio id="gpio3" pin="3" direction="input" />
+
+# devices
+  <led id="gate_open_relay" pin="4" />
+  <led id="gate_close_relay" pin="5" />
+  <button id="gate_open_limit" gpio="$gpio2" pull_up="true" />
+  <button id="gate_close_limit" gpio="$gpio3" pull_up="true" />
+
+# services

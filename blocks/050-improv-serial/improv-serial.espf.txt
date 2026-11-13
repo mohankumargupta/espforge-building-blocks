@@ -1,0 +1,20 @@
+====================
+050 - IMPROV SERIAL PAIRING AND WEB INSTALLER PROTOCOL
+
+<improv> is a proposal, and the console owns UART0. Pairing also needs a Wi-Fi
+scan API and a credential store, so this block is a provisioning story rather
+than a single missing framer.
+====================
+
+# espforge
+  <project name="improv_serial" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+  <console type="uart" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+# services
+  <improv id="pairing" console="uart" radio="$radio" />

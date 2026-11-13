@@ -1,0 +1,20 @@
+====================
+062 - ADDRESSABLE LED STRIP PARTITIONING AND VIRTUAL ZONES
+
+<led_strip> and <light_zone> are proposals: no RMT channel, no strip driver and
+no shared framebuffer. The zones are a compiler problem (non-overlapping index
+ranges) as much as a runtime one.
+====================
+
+# espforge
+  <project name="led_zones" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <led_strip id="physical_strip" pin="3" leds="60" chipset="ws2812" order="GRB" />
+  <light_zone id="desk_left" strip="$physical_strip" from="0" to="29" />
+  <light_zone id="desk_right" strip="$physical_strip" from="30" to="59" />
+
+# services

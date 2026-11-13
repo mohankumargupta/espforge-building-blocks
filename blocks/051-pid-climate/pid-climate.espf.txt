@@ -1,0 +1,21 @@
+====================
+051 - PID FEEDBACK LOOP AND PRECISION TEMPERATURE REGULATION
+
+No <pwm> and no <climate>: the PID loop runs in app.rs over a real <scd4x>
+reading, with clamping and anti-windup, but the duty cycle has no output to
+drive. <pwm id="heater" /> is a proposal.
+====================
+
+# espforge
+  <project name="pid_climate" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="4" scl="5" frequency="100kHz" />
+
+# devices
+  <scd4x id="air" bus="$i2c0" address="0x62" />
+  <pwm id="heater" pin="3" frequency="1kHz" resolution="10bit" />
+
+# services

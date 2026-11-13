@@ -1,0 +1,19 @@
+====================
+049 - REENTRANT SCRIPTS AND ASYNCHRONOUS FLOW CONTROL
+
+No <script> element: the sequence is a non-blocking state machine in app.rs
+over a real <button> and <led>. mode: restart is modelled with a generation
+counter, so a second trigger cancels the run in flight.
+====================
+
+# espforge
+  <project name="scripts" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+# devices
+  <button id="physical_button" pin="4" pull_up="true" />
+  <led id="alert_relay" pin="3" />
+
+# services

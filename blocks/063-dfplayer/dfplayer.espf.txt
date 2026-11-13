@@ -1,0 +1,21 @@
+====================
+063 - SERIAL MP3 MEDIA PLAYER (DFPLAYER MINI)
+
+No <dfplayer> driver: UART1 is real, the chime button and the BUSY line are
+real GPIO, and app.rs builds the 10-byte command packet with its two's
+complement checksum.
+====================
+
+# espforge
+  <project name="dfplayer" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <uart id="uart1" uart="UART1" tx="6" rx="7" baud_rate="9600" />
+
+# devices
+  <button id="chime_button" pin="4" pull_up="true" />
+  <button id="player_busy" pin="10" />
+
+# services

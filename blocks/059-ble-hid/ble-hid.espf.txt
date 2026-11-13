@@ -1,0 +1,20 @@
+====================
+059 - BLE HUMAN INTERFACE DEVICE (HID) MEDIA REMOTE
+
+<ble_hid> and the peripheral-role <ble> are proposals. The mute button is real;
+the GATT server, HID report descriptor and bonding are not.
+====================
+
+# espforge
+  <project name="ble_hid" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <ble id="radio" role="peripheral" />
+
+# devices
+  <button id="mute_button" pin="3" pull_up="true" />
+
+# services
+  <ble_hid id="remote" ble="$radio" kind="consumer" name="Living Room Remote" />

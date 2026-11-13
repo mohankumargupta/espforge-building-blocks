@@ -1,0 +1,21 @@
+====================
+097 - CUSTOM BLE GATT SERVER PROFILE AND CHARACTERISTICS
+
+<ble> in peripheral role and the <gatt_service>/<characteristic> elements are
+proposals. The whole attribute table, MTU negotiation and notification path
+are missing, along with the controller that blocks 059 also needs.
+====================
+
+# espforge
+  <project name="ble_gatt_server" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <ble id="radio" role="peripheral" />
+
+# devices
+  <gatt_service id="custom_service" ble="$radio" uuid="12345678-1234-5678-1234-56789abcdef0" />
+  <characteristic service="$custom_service" uuid="12345678-1234-5678-1234-56789abcdef1" value="espforge-ready" permissions="read,write" />
+
+# services
