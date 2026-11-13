@@ -6,7 +6,10 @@ feature, states what a compiler/runtime needs to support it, and translates it
 into an espforge project.
 
 The ESPHome YAML is the specification. The espforge side is the target: a
-project file (`.espf.txt`) plus the `src/app.rs` that drives it.
+project file (`.espf.txt`) plus the `src/app.rs` that drives it. Optional
+overlay files next to the `.espf.txt` (`partitions.csv`, `Cargo.extra.toml`,
+`.cargo/*.toml`, the Wokwi files) replace or extend what the generator writes;
+`build/` is disposable output.
 
 espforge itself lives at `./espforge` (git-ignored: it is its own checkout).
 
@@ -35,7 +38,7 @@ Every block's README opens with its status:
 | # | Block | ESPHome block | Status | What is missing today |
 |---|---|---|---|---|
 | 001 | [Minimal boot & serial logger](blocks/001-minimal/README.md) | `esphome`, `logger` | ✅ | — |
-| 002 | [Wi-Fi & OTA](blocks/002-wifi-ota/README.md) | `wifi`, `ota` | 🟡 | Wi-Fi works; no `<ota>` service |
+| 002 | [Wi-Fi & OTA](blocks/002-wifi-ota/README.md) | `wifi`, `ota` | 🟡 | Wi-Fi and `<ota>` A/B updates work; no upload endpoint or `password` — the transport is `app.rs` |
 | 003 | [Native API transport](blocks/003-native-api/README.md) | `api` | ❌ | no `<api>` service; only client services (HTTP/WS/NTP) |
 | 004 | [Output & switch (blink)](blocks/004-gpio-switch/README.md) | `output`, `switch` | ✅ | no entity names; the `id` is the handle |
 | 005 | [Binary sensor & debounce](blocks/005-binary-sensor/README.md) | `binary_sensor`, `filters` | ✅ | no declarative filter pipeline: debounce is Rust in `app.rs` |
@@ -63,7 +66,7 @@ Every block's README opens with its status:
 | 027 | [ESP-NOW peer messaging](blocks/027-esp-now/README.md) | `esp_now` | ❌ | no peer transport or unassociated radio mode |
 | 028 | [Thermostat regulation](blocks/028-thermostat/README.md) | `climate: platform: thermostat` | ✅ | no climate entity; hysteresis and min-off are Rust |
 | 029 | [Template sensor & derived math](blocks/029-template-sensor/README.md) | `sensor: platform: template` | ✅ | no template entity; the calculation is Rust |
-| 030 | [Health diagnostics & watchdog](blocks/030-diagnostics/README.md) | `uptime`, `wifi_signal`, `restart` | ❌ | no RSSI, heap, uptime or reset API; no watchdog |
+| 030 | [Health diagnostics & watchdog](blocks/030-diagnostics/README.md) | `uptime`, `wifi_signal`, `restart` | ❌ | no RSSI, heap or uptime API; no watchdog (reboot only via `<ota>`) |
 | 031 | [IR remote & protocol decoding](blocks/031-ir-remote/README.md) | `remote_transmitter`, `remote_receiver` | ❌ | no RMT carrier, edge capture or NEC decoder |
 | 032 | [Ultrasonic distance](blocks/032-ultrasonic/README.md) | `sensor: platform: ultrasonic` | 🟡 | trigger and echo are GPIO; the echo width is polled, not captured |
 | 033 | [RTTTL melodies](blocks/033-rtttl/README.md) | `rtttl`, `output: ledc` | ❌ | no PWM/tone output and no RTTTL parser |
@@ -72,8 +75,15 @@ Every block's README opens with its status:
 | 036 | [Multi-speed fan](blocks/036-fan-speed/README.md) | `fan: platform: speed` | ❌ | no PWM output and no fan entity |
 | 037 | [Matrix keypad scanning](blocks/037-matrix-keypad/README.md) | `matrix_keypad` | 🟡 | rows/columns are GPIO; scan and lockout are in `app.rs` |
 | 038 | [BLE GATT client](blocks/038-ble-client/README.md) | `ble_client` | ❌ | no BLE central role, GATT discovery or notifications |
-| 039 | [Safe mode recovery](blocks/039-safe-mode/README.md) | `safe_mode`, `ota` | ❌ | no RTC boot counter, AP fallback or OTA |
-| 040 | [Packages & composition](blocks/040-packages/README.md) | `packages` | ❌ | no includes, merge or override stage |
+| 039 | [Safe mode recovery](blocks/039-safe-mode/README.md) | `safe_mode`, `ota` | ❌ | no RTC boot counter, boot deadline or AP fallback; `<ota>` now gives recovery a target |
+| 040 | [Packages & composition](blocks/040-packages/README.md) | `packages` | ❌ | no `<include>` or config merge; file overlays only |
+
+`# espforge` now also carries two project-wide elements: `<logger>`, which sets
+per-subsystem levels (`drivers`, `network`, `hal`) and strips logging from flash
+at `level="none"`, and `<ota />`, which adds A/B partitions, rollback and
+`ctx.ota` (the app feeds it downloaded chunks, so the transport is up to you).
+Blocks 001 and 002 predate both and still show the older `ESP_LOG`-only and
+proposed `<ota>` service forms.
 
 Blocks 011–020 move from pins and buses to provisioning, services and power.
 The 🟡 blocks run today with the missing half written as Rust in `app.rs`
