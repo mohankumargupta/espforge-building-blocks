@@ -4,7 +4,7 @@
 //! log lines and deliberately **no** `mark_app_valid()`: T3 needs the freshly
 //! updated image to fail confirmation and roll back into `ota_0`.
 
-use crate::{service, Context};
+use crate::Context;
 use embassy_executor::Spawner;
 
 /// Served by `just ota-serve` on the host; the emulator's gateway
@@ -15,8 +15,8 @@ const UPDATE_URL: &str = "http://192.168.4.1:8000/blink.bin";
 /// zlib CRC32 up front and `finish` verifies both before touching `otadata`.
 /// `just ota-patch-v1 [image]` rewrites these two lines; `just ota-image-info`
 /// prints the values for any image (testota.md §4.2, T6).
-const IMAGE_SIZE: u32 = 0;
-const IMAGE_CRC32: u32 = 0;
+const IMAGE_SIZE: u32 = 106816;
+const IMAGE_CRC32: u32 = 0x6923ba79;
 
 pub async fn setup(ctx: &'static Context, _spawner: Spawner) {
     let station = service!(ctx, home);

@@ -3,7 +3,9 @@
 
 `begin(size, crc32)` needs both before the download starts, and T6 needs the
 image to fit the OTA slot. With `--patch`, rewrite the two constants in the v1
-app so `just ota-build-v1` picks them up.
+app so `just ota-build-v1` picks them up. `--merged` is for the full-flash images
+(`base.bin`, `v1.bin`): they are always 4MB by construction, so the slot check
+does not apply and only the size/CRC32 are reported.
 
 Exit codes: 0 fits, 1 does not fit the slot, 2 bad input.
 """
@@ -35,6 +37,11 @@ def main() -> int:
         metavar="APP_RS",
         help="rewrite IMAGE_SIZE/IMAGE_CRC32 in this app.rs",
     )
+    parser.add_argument(
+        "--merged",
+        action="store_true",
+        help="merged (full-flash) image: skip the OTA-slot check",
+    )
     args = parser.parse_args()
 
     if not args.image.is_file():
@@ -48,16 +55,19 @@ def main() -> int:
 
     size = len(data)
     crc = zlib.crc32(data) & 0xFFFFFFFF
-    fits = size < SLOT_SIZE
+    fits = args.merged or size < SLOT_SIZE
 
     print(f"image: {args.image}")
     print(f"size:  {size} (0x{size:x}) bytes")
     print(f"crc32: 0x{crc:08x}")
-    print(f"slot:  {SLOT_SIZE} (0x{SLOT_SIZE:x}) bytes  [T6]")
-    if fits:
-        print("fits:  yes")
+    if args.merged:
+        print("slot:  n/a - a merged image covers the whole flash, not a slot  [T6]")
     else:
-        print("fits:  NO - rebuild release or raise <ota flash_size>")
+        print(f"slot:  {SLOT_SIZE} (0x{SLOT_SIZE:x}) bytes  [T6]")
+        if fits:
+            print("fits:  yes")
+        else:
+            print("fits:  NO - rebuild release or raise <ota flash_size>")
 
     if data[0] != IMAGE_MAGIC:
         print(

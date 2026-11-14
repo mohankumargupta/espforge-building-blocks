@@ -4,11 +4,14 @@ How to exercise block 002 end to end with the Espressif emulator (`esp-emu`,
 v1.0.0 in this workspace), using a `python3 -m http.server` on the host as the
 update source and the espforge `blink` example as the OTA payload.
 
-The block itself only joins Wi-Fi and logs its address: `<ota />` owns the A/B
-partition table and `ctx.ota`, but the transport is the app (see
-`blocks/002-wifi-ota/README.md`). So this plan tests the *block as shipped*
-(Wi-Fi + DHCP + partition layout) and a **test-only app variant** that drives
-`ctx.ota` from an HTTP download. The block's files are not modified.
+`<ota />` owns the A/B partition table and `ctx.ota`, and the transport is the
+app: `blocks/002-wifi-ota` already carries `<http_client>` and the
+`begin`/`write`/`finish` loop, but ships `IMAGE_SIZE = 0`, so it logs its
+address and stops short of downloading (see `blocks/002-wifi-ota/README.md`).
+This plan therefore boots the *block as shipped* for Wi-Fi, DHCP and the
+partition layout (T0/T1), then the `espressifemulator/002-wifi-ota/v1` variant,
+whose constants `just ota-patch-v1` fills in from the payload, for T2 onwards.
+`blocks/002-wifi-ota/` is not modified.
 
 All espforge invocations go through the root `justfile` (`just build`,
 `just gen`, `just espforge`, `just esp-emu`), per `AGENTS.md`. `espflash` is
@@ -93,8 +96,9 @@ Everything disposable lives under `build/ota/` (already gitignored).
 | `build/ota/base.bin` | `blocks/002-wifi-ota`, merged image | T0/T1: block as shipped |
 | `build/ota/blink.bin` | espforge `01.Basics/blink`, app image only | OTA payload served over HTTP |
 | `build/ota/blink.fw.bin` | `blink` + `<ota />` + `mark_app_valid()` (optional) | T4: confirmed image persistence |
-| `build/ota/v1.bin` | test variant of 002 with `<http_client>` and the updater | OTA client, merged image |
-| `build/ota-src/v1/` | copy of the block + edits | the variant project (kept out of `blocks/`) |
+| `build/ota/v1.bin` | `espressifemulator/002-wifi-ota/v1`, merged image | OTA client, merged image |
+| `build/ota-bad/blink.bin` | `blink.bin` with one byte flipped (same length) | T5: CRC verification failure |
+| `build/ota-src/blink/` | `espforge new --example blink` | the payload project (kept out of `blocks/`) |
 
 `just build` always writes the generated crate to `build/build`, so copy each
 image out before building the next fixture.
@@ -103,10 +107,13 @@ image out before building the next fixture.
 
 ## 4. Building the fixtures
 
+`just ota-fixtures` runs 4.1-4.4 in order; the commands below are what those
+recipes do, kept so each step stays inspectable.
+
 ### 4.1 Baseline: the block as shipped (T0/T1)
 
 ```sh
-just build example=blocks/002-wifi-ota
+just build blocks/002-wifi-ota
 mkdir -p build/ota
 (cd build/build && cargo espflash save-image --merge \
   --chip esp32c3 --flash-size 4mb \
@@ -127,8 +134,8 @@ Expected boot log: `wifi-ota: connecting...` then
 Generate it through the justfile's espforge wrapper, then build it:
 
 ```sh
-just espforge "examples get 01.Basics/blink --out build/ota-src/blink"
-just build example=build/ota-src/blink
+just espforge "new --example blink --chip esp32c3 --dir build/ota-src/blink"
+just build build/ota-src/blink
 (cd build/build && cargo espflash save-image \
   --chip esp32c3 --flash-size 4mb ../../build/ota/blink.bin)
 ```
@@ -157,15 +164,18 @@ PY
 
 Any later rebuild of `blink` changes both numbers — recopy them into the app.
 
-### 4.3 The OTA client: a test-only variant of 002
+### 4.3 The OTA client: the `v1` variant of 002
+
+The variant is checked in as `espressifemulator/002-wifi-ota/v1/`: the block's
+espf plus `<http_client>` in `v1/v1.espf.txt`, and the updater in
+`v1/src/app.rs`. Only its two constants are per-payload:
 
 ```sh
-mkdir -p build/ota-src/v1/src
-cp blocks/002-wifi-ota/wifi-ota.espf.txt build/ota-src/v1/
-cp blocks/002-wifi-ota/src/app.rs     build/ota-src/v1/src/
+just ota-v1      # ota-blink -> ota-patch-v1 -> ota-build-v1
 ```
 
-Add the HTTP transport to `build/ota-src/v1/wifi-ota.espf.txt`:
+To derive it by hand, take `blocks/002-wifi-ota/wifi-ota.espf.txt` and add the
+transport:
 
 ```xml
 # services
@@ -177,8 +187,8 @@ Add the HTTP transport to `build/ota-src/v1/wifi-ota.espf.txt`:
 4 KiB keeps flash-write chunks small; `timeout_ms` is generous because the
 emulator is instruction-stepped.
 
-Replace `build/ota-src/v1/src/app.rs` with the updater. The two constants are
-the ones printed by the script above:
+The two constants are the ones printed by the script above (`just ota-patch-v1`
+rewrites them in place):
 
 ```rust
 use crate::{service, Context};
@@ -255,8 +265,8 @@ image being the one that fails to confirm.
 Build and image it:
 
 ```sh
-just check example=build/ota-src/v1      # schema + resource graph
-just build  example=build/ota-src/v1
+just check build/ota-src/v1      # schema + resource graph
+just build  build/ota-src/v1
 (cd build/build && cargo espflash save-image --merge \
   --chip esp32c3 --flash-size 4mb \
   --partition-table partitions.csv --target-app-partition ota_0 \
@@ -339,9 +349,11 @@ With `build/ota/v1.bin` built from §4.3 and the server up:
 ```sh
 just esp-emu "--chip esp32c3 --firmware build/ota/v1.bin --net user \
   --wifi-ssid MyNetwork --wifi-password MyPassword \
-  --control-tcp 127.0.0.1:5558 --elf build/build/target/riscv32imc-unknown-none-elf/debug/wifi_ota \
+  --control-tcp 127.0.0.1:5558 --elf build/ota/v1.elf --elf build/ota/blink.elf \
   --timeout 120s --log-file build/ota/t2.log"
 ```
+
+`just ota-t2` is this command with the same defaults.
 
 Expected:
 1. `TEST: ip 192.168.4.2/24`
@@ -370,8 +382,9 @@ as a golden value.
 ### T3 — Rollback: an unconfirmed image is reverted
 
 `blink` never calls `mark_app_valid()`, and `<ota rollback="true">` is the
-default, so a reset after T2 must boot v1 from `ota_0` again. In the *same*
-session that just reached `blink example`, send a hard reset:
+default, so a reset after T2 must boot v1 from `ota_0` again. `just ota-t3`
+drives the whole case unattended (boot, dump `otadata`, reset, dump again). In
+the *same* session that just reached `blink example`, send a hard reset:
 
 ```sh
 printf 'reset\n' | nc -q1 127.0.0.1 5558
@@ -384,6 +397,15 @@ line is seen.
 
 Pass: the next boot after T2 is v1, not blink. That is the bootloader's
 rollback, and it is the behaviour block 099 depends on.
+
+**Status here: not reproducible as written.** `espflash save-image --merge`
+(cargo-espflash 4.6.0) embeds a stock second-stage bootloader, and the `otadata`
+entry written for `rollback="true"` stays `state=0x0` (`NEW`) across the reset:
+the bootloader never promotes it to `PENDING_VERIFY`, so it boots the new slot
+again instead of reverting. `just ota-t3` decodes both sectors and fails on
+exactly this. Rollback needs a bootloader built with
+`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE`, which this image path does not supply;
+that is a firmware-tooling gap, not a `<ota />` regression.
 
 ### T3b — Cold boot from persisted flash
 
@@ -414,9 +436,15 @@ printf 'reset\nreset\n' | nc -q1 127.0.0.1 5558
 Expected: the payload keeps booting; v1 never comes back. Pass: confirmed
 `ota_1` survives repeated resets. Comparing T3 and T4 is the A/B contract.
 
+Moot under the same limitation as T3: with a bootloader that ignores slot
+state, *every* image persists, so the confirmed/unconfirmed comparison proves
+nothing until a rollback-enabled bootloader is used.
+
 ### T5 — Corrupt payload is rejected, device stays usable
 
-Serve a mutated copy of the same length so only the CRC differs:
+Serve a mutated copy of the same length so only the CRC differs
+(`just ota-blink-bad` writes `build/ota-bad/blink.bin`; serve that directory
+with `just ota-serve 8000 build/ota-bad` and run `just ota-t5`):
 
 ```sh
 cp build/ota/blink.bin build/ota/blink-bad.bin
@@ -446,7 +474,8 @@ Optional negative: pass the real size but a deliberately huge value in
 
 ### T7 — Server unreachable
 
-Stop `python3 -m http.server`, then run v1. Expected: `TEST: download failed`
+Stop `python3 -m http.server` (`just ota-t7` refuses to start while the port is
+still open), then run v1. Expected: `TEST: download failed`
 (timeout / connection refused) after `timeout_ms`, no reboot, device still
 associated and logging. Pass: a missing update server never bricks the node.
 
@@ -465,8 +494,9 @@ associated and logging. Pass: a missing update server never bricks the node.
 | T6 | payload | size < slot | partition sizing |
 | T7 | `v1.bin`, server down | error, no reboot | transport failure is survivable |
 
-A green run is T0–T3 plus T5 and T7. T4 is the extra confirmation the shipped
-blink payload cannot provide.
+A green run is T0–T2 plus T5 and T7. T3 and T4 need a rollback-enabled
+bootloader (see T3); with the stock one embedded by `espflash`, both are
+unreachable rather than failing.
 
 ---
 
@@ -493,6 +523,9 @@ up (T1).
 
 ## 8. What this plan does not test
 
+- **A/B rollback (T3/T4)**: the second-stage bootloader in a merged image comes
+  from espflash, and it ignores `otadata` slot state. Testing rollback needs a
+  bootloader built with `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE`.
 - **`ota:` as a server**: espforge has no upload endpoint, no `password` and no
   mDNS advertisement. Nothing here exercises an ESPHome-style push.
 - **Real RF / roaming / weak signal**, and WPA3-SAE specifics: the AP is
@@ -513,7 +546,7 @@ up (T1).
 
 ```sh
 # stop the server (Ctrl-C) and the emulator (timeout/Ctrl-C)
-rm -rf build/ota-src build/ota
+just ota-clean        # build/ota, build/ota-bad, build/ota-src
 ```
 
 `build/` is disposable and gitignored; `blocks/002-wifi-ota/` stays untouched

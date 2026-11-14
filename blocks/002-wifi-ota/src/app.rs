@@ -1,4 +1,4 @@
-use crate::{service, Context};
+use crate::Context;
 use embassy_executor::Spawner;
 
 /// Where the new image is served. On the emulator the guest reaches the host
