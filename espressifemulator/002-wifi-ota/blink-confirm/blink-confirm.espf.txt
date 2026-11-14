@@ -1,0 +1,20 @@
+====================
+BLINK WITH OTA CONFIRMATION (TEST-ONLY PAYLOAD)
+
+The espforge blink example plus <ota />, so an image installed into ota_1 can
+call mark_app_valid() and survive resets (testota.md §4.4, T4). The blink
+example itself stays untouched.
+====================
+
+# espforge
+  <project name="blink_confirm" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+  <ota rollback="true" />
+
+# peripherals
+
+# devices
+  <led id="red_led" pin="18" />
+
+# services
