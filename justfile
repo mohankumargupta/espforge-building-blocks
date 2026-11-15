@@ -404,3 +404,127 @@ sht31-boards:
 # Remove the disposable SHT31 fixtures; the driver folder stays.
 sht31-clean:
     rm -rf "{{ sht31_out }}" "{{ sht31_src }}"
+
+
+# ---- MH-Z19B driver fixture (drivers/mhz19b) ----------------------------
+
+mhz19b_dir := justfile_directory() / "drivers" / "mhz19b"
+mhz19b_project := mhz19b_dir / "firmware"
+mhz19b_out := build_dir / "mhz19b"
+mhz19b_port := "127.0.0.1:5560"
+
+# Schema and resource graph for the MH-Z19B fixture.
+mhz19b-check:
+    just check {{ mhz19b_project }}
+
+# Build the fixture as a merged image -> build/mhz19b/mhz19b.bin (+ .elf).
+mhz19b-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ mhz19b_out }}"
+    just check "{{ mhz19b_project }}"
+    just build "{{ mhz19b_project }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ mhz19b_out }}/mhz19b.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/mhz19b_test" \
+        "{{ mhz19b_out }}/mhz19b.elf"
+    ls -l "{{ mhz19b_out }}/mhz19b.bin" "{{ mhz19b_out }}/mhz19b.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+mhz19b-run timeout="90s" board=(mhz19b_dir / "board.json"):
+    just esp-emu "--chip esp32c3 --firmware {{ mhz19b_out }}/mhz19b.bin --cosim-board {{ board }} --control-tcp {{ mhz19b_port }} --elf {{ mhz19b_out }}/mhz19b.elf --timeout {{ timeout }} --log-file {{ mhz19b_out }}/emu.log"
+
+# `port` stays host:port for readability; netcat-openbsd wants them separate.
+# Send one control line to the running emulator, e.g. "part co2 input more".
+mhz19b-part args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ mhz19b_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Happy path: boot, read 400 ppm, set 1200 ppm, read it back.
+mhz19b-sensor: mhz19b-image
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ mhz19b_out }}/sensor.stdout"
+    : > "$out"
+    setsid just mhz19b-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for "TEST: mhz19b boot" "firmware boots" 40
+    wait_for "TEST: co2=400 ppm" "fresh air reads 400 ppm" 20
+    just mhz19b-part "part co2 input set:co2=1200" >/dev/null
+    wait_for "TEST: co2=1200 ppm" "set:co2=1200 reads back as 1200 ppm" 20
+    echo "mhz19b-sensor PASS"
+
+# Remove the disposable MH-Z19B fixture; the driver folder stays.
+mhz19b-clean:
+    rm -rf {{ mhz19b_out }}
+
+
+# ---- i2c scanner against the emulator's own bus (drivers/i2cscanner) -----
+
+scanner_project := justfile_directory() / "drivers" / "i2cscanner"
+scanner_out := build_dir / "i2cscanner"
+
+# Schema and resource graph for the scanner firmware.
+i2cscanner-check:
+    just check {{ scanner_project }}
+
+# Build the scanner as a merged image -> build/i2cscanner/scanner.bin (+ .elf).
+i2cscanner-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ scanner_out }}"
+    just check "{{ scanner_project }}"
+    just build "{{ scanner_project }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ scanner_out }}/scanner.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/i2c_scanner" \
+        "{{ scanner_out }}/scanner.elf"
+    ls -l "{{ scanner_out }}/scanner.bin" "{{ scanner_out }}/scanner.elf"
+
+# Run the scanner with no --cosim-board (emulator's built-in EEPROM at 0x50);
+# known red on esp-hal 1.2.2 + esp-emu 1.0.0, see testsht31.md §1a.
+i2cscanner-run timeout="30s":
+    just esp-emu "--chip esp32c3 --firmware {{ scanner_out }}/scanner.bin --elf {{ scanner_out }}/scanner.elf --timeout {{ timeout }} --log-file {{ scanner_out }}/emu.log"
+
+# T-gate: the scan must find the built-in EEPROM at 0x50 and nothing else.
+i2cscanner-test: i2cscanner-image
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ scanner_out }}/scan.stdout"
+    : > "$out"
+    setsid just i2cscanner-run 30s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    for _ in $(seq 1 30); do
+        grep -q 'Scan complete' "$out" && break
+        sleep 1
+    done
+    grep -q 'Scan complete' "$out" || { echo "FAIL: the scan never completed; see $out" >&2; exit 1; }
+    grep -E 'Found device at address|Scan complete' "$out"
+    if ! grep -q 'Found device at address 0x50' "$out"; then
+        echo "FAIL: the built-in EEPROM at 0x50 was not found; see $out" >&2
+        exit 1
+    fi
+    found=$(grep -c 'Found device at address' "$out" || true)
+    if (( found != 1 )); then
+        echo "FAIL: $found devices answered, not just 0x50; see $out" >&2
+        exit 1
+    fi
+    echo "PASS: scan found the emulator's built-in EEPROM at 0x50, and nothing else"

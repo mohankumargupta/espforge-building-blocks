@@ -99,12 +99,23 @@ not the driver: `write`, `write_read` and `read` all fail, and the failure is
 the same at 100 kHz and 400 kHz and with no board at all. This is a
 toolchain/emulator I²C issue, not a `<sht31>` regression.
 
+Dropping the board does not get around it. The stock espforge `i2c_scanner`
+(`drivers/i2cscanner/`, `just i2cscanner-test`) runs the same pads with **no**
+`--cosim-board`, so the bus is the emulator's own, and it still prints only
+`Scan complete`. A probe on the same image separates the two answers: 0x44
+fails `AcknowledgeCheckFailed(Unknown)` (nothing there), while 0x50 — the
+built-in EEPROM — fails `AcknowledgeCheckFailed(Data)`, so the device is seen
+and the transaction dies in the data phase. Empty and one-byte writes, plain
+reads and `write_read` all fail; there is no board or address that makes a
+transaction complete on this pair.
+
 Consequences for the recipes:
 
 | Recipe | Today |
 |---|---|
 | `just sht31-check`, `just sht31-image` | pass: schema, generation, compile and merge |
 | `just sht31-sensor`, `just sht31-scan`, `just sht31-negative` | fail at T0/T1 |
+| `just i2cscanner-test` (no board) | fails: the scan finds no 0x50, reproducing the gate without a part |
 
 The rest of this document is the plan that applies unchanged once I²C
 completes a transaction on this pair. Until then, the part and board can still

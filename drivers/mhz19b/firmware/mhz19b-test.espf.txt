@@ -1,0 +1,21 @@
+====================
+MH-Z19B test firmware
+
+Fixture for drivers/mhz19b: the `<mhz19b>` manifest driver over UART1, wired to
+the virtual MH-Z19B part in drivers/mhz19b/board.json. The part's TX is on
+GPIO 5 and its RX on GPIO 4, so the chip transmits on 4 and receives on 5.
+Prints `TEST:` lines the happy-path recipe asserts on.
+====================
+
+# espforge
+  <project name="mhz19b_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <uart id="uart1" uart="UART1" tx="4" rx="5" baud_rate="9600" />
+
+# devices
+  <mhz19b id="co2" bus="$uart1" />
+
+# services

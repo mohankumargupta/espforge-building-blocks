@@ -1,0 +1,24 @@
+====================
+I2C scanner: the emulator's built-in EEPROM
+
+The stock espforge `i2c_scanner` example on the SHT31 fixture's pads
+(SDA = GPIO 5, SCL = GPIO 6), for running with NO --cosim-board. The
+emulator's own I2C port is then in charge, and its built-in 24Cxx EEPROM
+answers at 0x50.
+
+A scan that finds 0x50 proves esp-hal's I2C transactions complete at all, so
+a failing SHT31 fixture is the co-simulated part, not the toolchain. A scan
+that finds nothing means the gate in testsht31.md §1a is still the toolchain.
+====================
+
+# espforge
+  <project name="i2c_scanner" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+
+# services
