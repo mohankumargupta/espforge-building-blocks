@@ -1,0 +1,20 @@
+====================
+001 - SHT31 test firmware
+
+Fixture for testsht31.md: the `<sht31>` manifest driver over I2C, wired to the
+virtual SHT31 part in drivers/001-sht31/board.json (SCL = GPIO 6, SDA = GPIO 5,
+ADDR low = 0x44). Prints `TEST:` lines the test recipes assert on.
+====================
+
+# espforge
+  <project name="sht31_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <sht31 id="air" bus="$i2c0" address="0x44" />
+
+# services

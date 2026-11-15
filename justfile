@@ -9,6 +9,12 @@ ota_dir := build_dir / "ota"
 ota_src := build_dir / "ota-src"
 ota_tool := ota_project / "scripts" / "image-info.py"
 
+sht31_dir := justfile_directory() / "drivers" / "001-sht31"
+sht31_project := sht31_dir / "firmware"
+sht31_out := build_dir / "sht31"
+sht31_src := build_dir / "sht31-src"
+sht31_port := "127.0.0.1:5559"
+
 @cat-all pattern="**/*":
     shopt -s globstar nullglob; files=(); for f in {{pattern}}; do [[ -f "$f" ]] && files+=("$f"); done; (( ${#files[@]} )) && bat "${files[@]}"
 
@@ -268,3 +274,133 @@ ota-state-copy:
 # Remove the disposable fixtures (build/ is gitignored).
 ota-clean:
     rm -rf "{{ ota_dir }}" "{{ ota_dir }}-bad" "{{ ota_src }}"
+
+
+# ---- 001-sht31 driver fixture (testsht31.md) ----------------------------
+
+# Schema and resource graph for the SHT31 test firmware.
+sht31-check:
+    just check {{ sht31_project }}
+
+# Build the test firmware as a merged image -> build/sht31/sht31.bin (+ .elf).
+sht31-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ sht31_out }}"
+    just check "{{ sht31_project }}"
+    just build "{{ sht31_project }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ sht31_out }}/sht31.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/sht31_test" \
+        "{{ sht31_out }}/sht31.elf"
+    ls -l "{{ sht31_out }}/sht31.bin" "{{ sht31_out }}/sht31.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+# `board` defaults to the checked-in board; testsht31.md uses the variants.
+sht31-run timeout="90s" board=(sht31_dir / "board.json"):
+    just esp-emu "--chip esp32c3 --firmware {{ sht31_out }}/sht31.bin --cosim-board {{ board }} --control-tcp {{ sht31_port }} --elf {{ sht31_out }}/sht31.elf --timeout {{ timeout }} --log-file {{ sht31_out }}/emu.log"
+
+# Send one control line to the running emulator, e.g. "part sensor input warmer".
+sht31-part args:
+    printf '%s\n' "{{ args }}" | nc -q1 {{ sht31_port }}
+
+# T1: scan the bus from the espforge i2c_scanner example, on the board's pins.
+sht31-scan:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ sht31_out }}" "{{ sht31_src }}"
+    rm -rf "{{ sht31_src }}/scanner"
+    just espforge "new --example i2c_scanner --chip esp32c3 --dir build/sht31-src/scanner"
+    sed -i -E 's/sda="[0-9]+" scl="[0-9]+"/sda="5" scl="6"/' \
+        "{{ sht31_src }}/scanner/i2c_scanner.espf"
+    just build "{{ sht31_src }}/scanner"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ sht31_out }}/scanner.bin")
+    out="{{ sht31_out }}/scan.stdout"
+    : > "$out"
+    setsid just esp-emu "--chip esp32c3 --firmware {{ sht31_out }}/scanner.bin --cosim-board {{ sht31_dir }}/board.json --timeout 25s --log-file {{ sht31_out }}/scan-emu.log" > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    for _ in $(seq 1 25); do
+        grep -q 'Scan complete' "$out" && break
+        sleep 1
+    done
+    if ! grep -q 'Found device at address 0x44' "$out"; then
+        echo "FAIL: T1 the sensor at 0x44 was not found; see $out" >&2; exit 1
+    fi
+    for stray in 0x45 0x50; do
+        if grep -q "Found device at address $stray" "$out"; then
+            echo "FAIL: T1 something answered at $stray; see $out" >&2; exit 1
+        fi
+    done
+    echo "PASS: T1 scan finds 0x44 and nothing else"
+
+# T0/T2-T5: boot, read status and room conditions, move the part, set values.
+sht31-sensor: sht31-image
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ sht31_out }}/sensor.stdout"
+    : > "$out"
+    setsid just sht31-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for "TEST: sht31 boot" "T0 firmware boots" 40
+    wait_for "TEST: status=0x8010" "T2 status after the driver's soft reset" 20
+    wait_for "TEST: reading t=22.50 rh=45.00" "T3 room conditions 22.50 C / 45.00 %RH" 20
+    just sht31-part "part sensor input warmer" >/dev/null
+    just sht31-part "part sensor input wetter" >/dev/null
+    wait_for "TEST: reading t=23.50 rh=50.00" "T4 warmer + wetter -> 23.50 C / 50.00 %RH" 20
+    just sht31-part "part sensor input set:temperature=31.5" >/dev/null
+    just sht31-part "part sensor input set:humidity=62" >/dev/null
+    wait_for "TEST: reading t=31.50 rh=62.00" "T5 set -> 31.50 C / 62.00 %RH" 20
+    echo "sht31-sensor PASS"
+
+# T7/T8: wrong address and wrong pins must fail initialization.
+sht31-negative: sht31-image sht31-boards
+    #!/usr/bin/env bash
+    set -euo pipefail
+    neg() {
+        local name="$1" board="$2" out="{{ sht31_out }}/neg-$1.stdout"
+        : > "$out"
+        setsid just sht31-run 30s "$board" > "$out" 2>&1 &
+        local emu=$! found=1
+        for _ in $(seq 1 25); do
+            grep -q 'initialization failed' "$out" && { found=0; break; }
+            sleep 1
+        done
+        kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true
+        if (( found )); then echo "FAIL: $name never failed initialization; see $out" >&2; return 1; fi
+        if grep -q 'TEST: reading' "$out"; then echo "FAIL: $name produced a reading" >&2; return 1; fi
+        echo "PASS: $name: air did not initialize"
+    }
+    neg addr45 "{{ sht31_out }}/board-0x45.json"
+    neg scl7 "{{ sht31_out }}/board-scl7.json"
+
+# Variant boards for the negative cases; each sits beside a copy of the part.
+sht31-boards:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ sht31_out }}"
+    cp "{{ sht31_dir }}/sht31.wasm" "{{ sht31_out }}/sht31.wasm"
+    printf '%s\n' '{ "parts": { "sensor": { "module": "sht31.wasm", "pins": { "SCL": 6, "SDA": 5 }, "addr": "0x45" } } }' \
+        > "{{ sht31_out }}/board-0x45.json"
+    printf '%s\n' '{ "parts": { "sensor": { "module": "sht31.wasm", "pins": { "SCL": 7, "SDA": 5 } } } }' \
+        > "{{ sht31_out }}/board-scl7.json"
+
+# Remove the disposable SHT31 fixtures; the driver folder stays.
+sht31-clean:
+    rm -rf "{{ sht31_out }}" "{{ sht31_src }}"
