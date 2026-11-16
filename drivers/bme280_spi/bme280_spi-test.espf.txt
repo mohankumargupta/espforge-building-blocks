@@ -1,0 +1,20 @@
+====================
+BME280 SPI test firmware
+
+Fixture for planbme280_spi.md: the project-local `<bme280_spi>` driver over
+SPI, wired to the virtual BME280 part (CS = GPIO 7, SCK = GPIO 6,
+MOSI = GPIO 3, MISO = GPIO 2). Prints `TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="bme280_spi_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <spi id="spi2" sclk="6" mosi="3" miso="2" mode="0" frequency="1000kHz" />
+
+# devices
+  <bme280_spi id="climate" bus="$spi2" cs="7" />
+
+# services

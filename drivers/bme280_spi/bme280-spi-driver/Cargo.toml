@@ -1,0 +1,14 @@
+# The Rust half of the external `<bme280_spi>` driver. Generic over
+# `embedded_hal::spi::SpiDevice`, so it does not depend on esp-hal, and the
+# manifest instantiates it with the endpoint espforge builds.
+[workspace]
+
+[package]
+name = "bme280-spi-driver"
+version = "0.1.0"
+edition = "2021"
+description = "Platform-agnostic Bosch BME280 SPI sensor driver"
+license = "MIT"
+
+[dependencies]
+embedded-hal = "1.0"

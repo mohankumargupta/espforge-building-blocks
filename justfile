@@ -733,3 +733,116 @@ adxl345-sensor: adxl345-image adxl345-part
 # Remove the disposable images; the fixture and the checked-in wasm stay.
 adxl345-clean:
     rm -rf {{ adxl345_out }} {{ adxl345_part_dir }}/target
+
+
+# ---- BME280 SPI virtual part fixture (drivers/bme280_spi) ----------------
+
+bme280_spi_rel := "drivers/bme280_spi"
+bme280_spi_dir := justfile_directory() / bme280_spi_rel
+bme280_spi_out := build_dir / "bme280_spi"
+bme280_spi_port := "127.0.0.1:5563"
+bme280_spi_part_dir := bme280_spi_dir / "parts" / "bme280_spi"
+bme280_spi_part_wasm := bme280_spi_dir / "parts" / "bme280_spi.wasm"
+
+# The part's own tests: ID, the calibration block, the data bytes and the
+# inputs, on the host.
+bme280-spi-part-test:
+    cargo test --manifest-path {{ bme280_spi_part_dir }}/Cargo.toml
+
+# Build the virtual BME280 -> drivers/bme280_spi/parts/bme280_spi.wasm.
+bme280-spi-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ bme280_spi_part_dir }}/Cargo.toml"
+    cp "{{ bme280_spi_part_dir }}/target/wasm32-unknown-unknown/release/bme280_spi.wasm" \
+        "{{ bme280_spi_part_wasm }}"
+    ls -l "{{ bme280_spi_part_wasm }}"
+
+# The driver's own tests: the ID check, the writes and the compensation, on
+# the host.
+bme280-spi-driver-test:
+    cargo test --manifest-path {{ bme280_spi_dir }}/bme280-spi-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+bme280-spi-check:
+    just check {{ bme280_spi_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+bme280-spi-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ bme280_spi_out }}"
+    just check "{{ bme280_spi_rel }}"
+    just build "{{ bme280_spi_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ bme280_spi_out }}/bme280_spi.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/bme280_spi_test" \
+        "{{ bme280_spi_out }}/bme280_spi.elf"
+    ls -l "{{ bme280_spi_out }}/bme280_spi.bin" "{{ bme280_spi_out }}/bme280_spi.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+bme280-spi-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ bme280_spi_out }}/bme280_spi.bin --cosim-board {{ bme280_spi_dir }}/board.json --control-tcp {{ bme280_spi_port }} --elf {{ bme280_spi_out }}/bme280_spi.elf --timeout {{ timeout }} --log-file {{ bme280_spi_out }}/emu.log"
+
+# One control line, e.g. "part climate input warmer".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+bme280-spi-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ bme280_spi_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing
+# drivers/bme280_spi/drivers/bme280_spi.kdl.
+bme280-spi-driver-record:
+    just espforge "driver {{ bme280_spi_rel }} add --local {{ bme280_spi_rel }}/drivers/bme280_spi.kdl"
+
+# Happy path: boot, room conditions, warmer, a pressure step, a humidity step.
+bme280-spi-sensor: bme280-spi-image bme280-spi-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ bme280_spi_out }}/sensor.stdout"
+    log="{{ bme280_spi_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just bme280-spi-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: bme280_spi boot" "firmware boots" 40
+    wait_for_log "is the SPI device on chip select GPIO 7" "the part attached on the firmware's CS" 10
+    wait_for "TEST: climate t=22.50 c p=1013.25 hpa rh=45.00 %" "room conditions" 20
+    just bme280-spi-part-input "part climate input warmer" >/dev/null
+    wait_for "TEST: climate t=23.50 c p=1013.25 hpa rh=45.00 %" "warmer -> 23.50 C" 20
+    just bme280-spi-part-input "part climate input set:pressure=1000" >/dev/null
+    wait_for "TEST: climate t=23.50 c p=1000.00 hpa rh=45.00 %" "set:pressure=1000 -> 1000.00 hPa" 20
+    just bme280-spi-part-input "part climate input set:humidity=62" >/dev/null
+    wait_for "TEST: climate t=23.50 c p=1000.00 hpa rh=62.00 %" "set:humidity=62 -> 62.00 %RH" 20
+    echo "bme280-spi-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+bme280-spi-clean:
+    rm -rf {{ bme280_spi_out }} {{ bme280_spi_part_dir }}/target
