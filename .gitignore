@@ -26,3 +26,7 @@ rustc-ice-*.txt
 #.idea/
 
 espforge
+
+# The driver lock the first tmp123 build writes; recreate it with
+# `just tmp123-driver-record` / the next build. See plantmp123.md §8.
+drivers/tmp123/.espforge/

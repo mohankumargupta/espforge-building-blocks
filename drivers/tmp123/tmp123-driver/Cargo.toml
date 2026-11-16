@@ -1,0 +1,14 @@
+# The Rust half of the external `<tmp123>` driver. Generic over
+# `embedded_hal::spi::SpiDevice`, so it does not depend on esp-hal, and the
+# manifest instantiates it with the endpoint espforge builds.
+[workspace]
+
+[package]
+name = "tmp123-driver"
+version = "0.1.0"
+edition = "2021"
+description = "Platform-agnostic TI TMP121/TMP123 SPI temperature sensor driver"
+license = "MIT"
+
+[dependencies]
+embedded-hal = "1.0"

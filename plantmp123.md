@@ -5,7 +5,11 @@ driver is **external** to `espforge-drivers` — a project-local KDL manifest re
 from `drivers/tmp123/drivers/`, not a bundled module — and prove the happy path
 end to end against the emulator's virtual TMP123 SPI part.
 
-**Status:** planned, not built. Nothing in this document is implemented yet.
+**Status:** built and verified on 2026-11-16, ESP32-C3 emulator, `esp-emu`
+1.0.0. All five checks in §12 pass; `just tmp123-sensor` prints the five
+`PASS` lines. Two places where reality differed from the plan are corrected
+below: the attach assertion reads `emu.log` (§5, §7), and the fixture README
+is `drivers/tmp123/README.md` (§11).
 
 **Baseline measured against the code, not assumed:**
 
@@ -445,8 +449,21 @@ tmp123-sensor: tmp123-image tmp123-part
         ls -l "$out" >&2 || true
         return 1
     }
+    # The attach line goes to --log-file, not to the emulator's stdout: the
+    # firmware console and the co-simulation log are different streams.
+    log="{{ tmp123_out }}/emu.log"
+    : > "$log"
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        return 1
+    }
     wait_for "TEST: tmp123 boot" "firmware boots" 40
-    wait_for "is the SPI device on chip select GPIO 7" "the part attached on the firmware's CS" 10
+    wait_for_log "is the SPI device on chip select GPIO 7" "the part attached on the firmware's CS" 10
     wait_for "TEST: reading t=25.00 c" "fresh part reads 25.00 C" 20
     just tmp123-part-input "part thermometer input warmer" >/dev/null
     wait_for "TEST: reading t=26.00 c" "warmer -> 26.00 C" 20
@@ -536,6 +553,11 @@ just tmp123-sensor    # boot, 25.00, warmer -> 26.00, set -> 31.50
 | firmware console | `INFO - TEST: reading t=25.00 c` |
 | after `warmer` | `INFO - TEST: reading t=26.00 c` |
 | after `set:temperature=31.5` | `INFO - TEST: reading t=31.50 c` |
+
+Measured, not assumed: the attach line is written only to `--log-file`; the
+firmware console and the co-simulation log are separate streams. The recipe
+asserts the attach line in `build/tmp123/emu.log` (§5) and everything else in
+`sensor.stdout`.
 
 **Byte-level evidence, if a value is wrong:** re-run with
 `--cosim-log events.jsonl`, or add the flag to a one-off `just esp-emu` line.
@@ -631,22 +653,25 @@ manifest you will edit repeatedly while the mechanism is new.
 
 ## 11. Ordered checklist
 
-- [ ] 1. Create `drivers/tmp123/tmp123-driver/` (`Cargo.toml`, `src/lib.rs`)
+- [x] 1. Create `drivers/tmp123/tmp123-driver/` (`Cargo.toml`, `src/lib.rs`)
       — §3
-- [ ] 2. `just tmp123-driver-test` — the datasheet table passes on the host
-- [ ] 3. Create `drivers/tmp123/drivers/tmp123.kdl` — §4
-- [ ] 4. Create `drivers/tmp123/tmp123-test.espf.txt` and `src/app.rs` — §4
-- [ ] 5. Add the `justfile` recipes — §5
-- [ ] 6. `just tmp123-check` — the manifest is discovered, parses and lowers
-- [ ] 7. `just tmp123-image` — the generated project compiles (the real
+- [x] 2. `just tmp123-driver-test` — the datasheet table passes on the host
+- [x] 3. Create `drivers/tmp123/drivers/tmp123.kdl` — §4
+- [x] 4. Create `drivers/tmp123/tmp123-test.espf.txt` and `src/app.rs` — §4
+- [x] 5. Add the `justfile` recipes — §5
+- [x] 6. `just tmp123-check` — the manifest is discovered, parses and lowers
+- [x] 7. `just tmp123-image` — the generated project compiles (the real
       manifest gate)
-- [ ] 8. `just tmp123-part` — `drivers/tmp123/tmp123.wasm` exists
-- [ ] 9. Create `drivers/tmp123/board.json` — §7
-- [ ] 10. `just tmp123-sensor` — 25.00 → 26.00 → 31.50, all `PASS` lines
-- [ ] 11. Add `drivers/tmp123/.espforge/` to `.gitignore` — §8
-- [ ] 12. Note the outcome in `drivers/tmp123/` (a short README, if the pattern
-      from `drivers/mhz19b/` is followed) and correct this document where
-      reality differed
+- [x] 8. `just tmp123-part` — `drivers/tmp123/tmp123.wasm` exists
+- [x] 9. Create `drivers/tmp123/board.json` — §7
+- [x] 10. `just tmp123-sensor` — 25.00 → 26.00 → 31.50, all `PASS` lines
+- [x] 11. Add `drivers/tmp123/.espforge/` to `.gitignore` — §8
+- [x] 12. `drivers/tmp123/README.md` records the outcome, and this document
+      is corrected where reality differed (§5, §7)
+
+One correction to §6: `just build` prints `build: wrote 'tmp123_test'` and
+compiles; the `driver: <path>` line is `gen`'s own summary, and the recipes
+do not call `gen` separately. The compile is what proves the manifest.
 
 ## 12. Verification matrix
 
