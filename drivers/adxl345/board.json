@@ -1,0 +1,3 @@
+{ "parts": {
+    "accel": { "module": "parts/adxl345.wasm", "pins": { "CS": 7, "SCK": 6, "MOSI": 3, "MISO": 2 } }
+} }

@@ -1,0 +1,20 @@
+====================
+ADXL345 test firmware
+
+Fixture for planadxl345.md: the bundled `<adxl345>` driver over SPI, wired to
+the virtual ADXL345 part (CS = GPIO 7, SCK = GPIO 6, MOSI = GPIO 3,
+MISO = GPIO 2). Prints `TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="adxl345_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <spi id="spi2" sclk="6" mosi="3" miso="2" mode="0" frequency="1000kHz" />
+
+# devices
+  <adxl345 id="accel" bus="$spi2" cs="7" />
+
+# services

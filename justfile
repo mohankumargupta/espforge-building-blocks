@@ -635,3 +635,101 @@ i2cscanner-test: i2cscanner-image
         exit 1
     fi
     echo "PASS: scan found the emulator's built-in EEPROM at 0x50, and nothing else"
+
+
+# ---- ADXL345 virtual part fixture (drivers/adxl345) ----------------------
+
+adxl345_rel := "drivers/adxl345"
+adxl345_dir := justfile_directory() / adxl345_rel
+adxl345_out := build_dir / "adxl345"
+adxl345_port := "127.0.0.1:5562"
+adxl345_part_dir := adxl345_dir / "parts" / "adxl345"
+adxl345_part_wasm := adxl345_dir / "parts" / "adxl345.wasm"
+
+# The part's own tests: DEVID, the axis bytes and the inputs, on the host.
+adxl345-part-test:
+    cargo test --manifest-path {{ adxl345_part_dir }}/Cargo.toml
+
+# Build the virtual ADXL345 -> drivers/adxl345/parts/adxl345.wasm.
+adxl345-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ adxl345_part_dir }}/Cargo.toml"
+    cp "{{ adxl345_part_dir }}/target/wasm32-unknown-unknown/release/adxl345.wasm" \
+        "{{ adxl345_part_wasm }}"
+    ls -l "{{ adxl345_part_wasm }}"
+
+# Schema and resource graph for the fixture.
+adxl345-check:
+    just check {{ adxl345_rel }}
+
+# Build the merged image -> build/adxl345/adxl345.bin (+ .elf).
+adxl345-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ adxl345_out }}"
+    just check "{{ adxl345_rel }}"
+    just build "{{ adxl345_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ adxl345_out }}/adxl345.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/adxl345_test" \
+        "{{ adxl345_out }}/adxl345.elf"
+    ls -l "{{ adxl345_out }}/adxl345.bin" "{{ adxl345_out }}/adxl345.elf"
+
+# Run the firmware with the virtual part on the control channel.
+adxl345-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ adxl345_out }}/adxl345.bin --cosim-board {{ adxl345_dir }}/board.json --control-tcp {{ adxl345_port }} --elf {{ adxl345_out }}/adxl345.elf --timeout {{ timeout }} --log-file {{ adxl345_out }}/emu.log"
+
+# One control line, e.g. "part accel input set:x=0.5".
+adxl345-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ adxl345_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Happy path: boot, DEVID accepted, flat reads 1 g on Z, then two moves.
+adxl345-sensor: adxl345-image adxl345-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ adxl345_out }}/sensor.stdout"
+    log="{{ adxl345_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just adxl345-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: adxl345 boot" "firmware boots" 40
+    wait_for_log "is the SPI device on chip select GPIO 7" "the part attached on the firmware's CS" 10
+    wait_for "TEST: accel x=0 y=0 z=1024 mg" "flat part reads 1 g on Z" 20
+    just adxl345-part-input "part accel input set:x=0.5" >/dev/null
+    wait_for "TEST: accel x=512 y=0 z=1024 mg" "set:x=0.5 reads back as 512 mg" 20
+    just adxl345-part-input "part accel input set:z=-1" >/dev/null
+    wait_for "TEST: accel x=512 y=0 z=-1024 mg" "set:z=-1 reads back as -1024 mg" 20
+    echo "adxl345-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+adxl345-clean:
+    rm -rf {{ adxl345_out }} {{ adxl345_part_dir }}/target
