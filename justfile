@@ -957,3 +957,112 @@ mfrc522-sensor: mfrc522-image mfrc522-part
 # Remove the disposable images; the fixture and the checked-in wasm stay.
 mfrc522-clean:
     rm -rf {{ mfrc522_out }} {{ mfrc522_part_dir }}/target
+
+# ---- MPU-9250 virtual part fixture (drivers/mpu9250) ----------------------
+
+mpu9250_rel := "drivers/mpu9250"
+mpu9250_dir := justfile_directory() / mpu9250_rel
+mpu9250_out := build_dir / "mpu9250"
+mpu9250_port := "127.0.0.1:5565"
+mpu9250_part_dir := mpu9250_dir / "parts" / "mpu9250"
+mpu9250_part_wasm := mpu9250_dir / "parts" / "mpu9250.wasm"
+
+# The part's own tests: the identity, the power-on registers, the fourteen data
+# bytes, the self-clearing reset, the inputs and clamps, on the host.
+mpu9250-part-test:
+    cargo test --manifest-path {{ mpu9250_part_dir }}/Cargo.toml
+
+# Build the virtual MPU-9250 -> drivers/mpu9250/parts/mpu9250.wasm.
+mpu9250-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ mpu9250_part_dir }}/Cargo.toml"
+    cp "{{ mpu9250_part_dir }}/target/wasm32-unknown-unknown/release/mpu9250.wasm" \
+        "{{ mpu9250_part_wasm }}"
+    ls -l "{{ mpu9250_part_wasm }}"
+
+# The driver's own tests: the identity check, the reset poll, the configuration
+# writes, the fourteen-byte read and the decode, on the host.
+mpu9250-driver-test:
+    cargo test --manifest-path {{ mpu9250_dir }}/mpu9250-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+mpu9250-check:
+    just check {{ mpu9250_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+mpu9250-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ mpu9250_out }}"
+    just check "{{ mpu9250_rel }}"
+    just build "{{ mpu9250_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ mpu9250_out }}/mpu9250.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/mpu9250_test" \
+        "{{ mpu9250_out }}/mpu9250.elf"
+    ls -l "{{ mpu9250_out }}/mpu9250.bin" "{{ mpu9250_out }}/mpu9250.elf"
+
+# Run the firmware with the virtual IMU on the control channel.
+mpu9250-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ mpu9250_out }}/mpu9250.bin --cosim-board {{ mpu9250_dir }}/board.json --control-tcp {{ mpu9250_port }} --elf {{ mpu9250_out }}/mpu9250.elf --timeout {{ timeout }} --log-file {{ mpu9250_out }}/emu.log"
+
+# One control line, e.g. "part imu input set:az=0".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+mpu9250-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ mpu9250_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/mpu9250/drivers/mpu9250.kdl.
+mpu9250-driver-record:
+    just espforge "driver {{ mpu9250_rel }} add --local {{ mpu9250_rel }}/drivers/mpu9250.kdl"
+
+# Happy path: boot, read the flat part, then move it on X and turn the gyro.
+mpu9250-sensor: mpu9250-image mpu9250-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ mpu9250_out }}/sensor.stdout"
+    log="{{ mpu9250_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just mpu9250-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: mpu9250 boot" "firmware boots" 40
+    wait_for_log "is the SPI device on chip select GPIO 7" "the part attached on the firmware's CS" 10
+    wait_for "TEST: imu ax=0.00 ay=0.00 az=1.00 g gx=0.00 gy=0.00 gz=0.00 dps t=21.00 c" "flat part reads 1 g on Z at 21.00 C" 20
+    just mpu9250-part-input "part imu input set:ax=0.5" >/dev/null
+    wait_for "TEST: imu ax=0.50 ay=0.00 az=1.00 g" "set:ax=0.5 -> 0.50 g" 20
+    just mpu9250-part-input "part imu input set:gz=90" >/dev/null
+    wait_for "gz=90.00 dps" "set:gz=90 -> 90.00 dps" 20
+    echo "mpu9250-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+mpu9250-clean:
+    rm -rf {{ mpu9250_out }} {{ mpu9250_part_dir }}/target

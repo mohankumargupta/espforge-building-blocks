@@ -1,0 +1,35 @@
+// The external `<mpu9250>` driver: a project-local manifest, not a module in
+// espforge-drivers (there is no bundled MPU-9250 driver). `codegen.feature` is
+// absent, so the dependency below is written into the generated project's
+// Cargo.toml instead of selecting an espforge-drivers feature.
+driver "mpu9250" {
+    format_version 2
+    summary "InvenSense MPU-9250 accelerometer and gyro on SPI"
+    description #"Speaks the MPU-9250's SPI protocol: one address byte (bit 7 set for a read, bits 6:0 the register), no dummy byte, the address incrementing across a read while CS stays low. The constructor resets the part through PWR_MGMT_1, polls until DEVICE_RESET clears, checks WHO_AM_I for 0x71, applies SMPLRT_DIV/CONFIG/ACCEL_CONFIG2/GYRO_CONFIG/ACCEL_CONFIG and wakes it on the X-gyro PLL. read() takes all fourteen measurement bytes in one transaction and returns g, dps and °C at the power-on ±2 g and ±250 dps scales. The magnetometer (AK8963) is on the auxiliary I2C bus and is out of scope. The Rust half is the `mpu9250-driver` crate beside this manifest, so the driver is external to espforge-drivers."#
+    category "sensor"
+
+    dependency "mpu9250-driver" {
+        path "../mpu9250-driver"
+    }
+
+    bus "spi" {
+        mode 0
+        frequency "1000kHz"
+    }
+
+    codegen {
+        runtime "blocking" {
+            type "mpu9250_driver::Mpu9250<espforge_runtime::ConfiguredSpiDevice>"
+            constructor "mpu9250_driver::Mpu9250::new({bus_device})"
+            endpoint "espforge_runtime::ConfiguredSpiDevice"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the IMU during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<mpu9250 id="imu" bus="$spi2" cs="7" />"#
+    see_also "peripherals/spi"
+}

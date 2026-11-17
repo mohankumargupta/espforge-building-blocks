@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "mpu9250": {
+      "kind": "local",
+      "source": "./drivers/mpu9250.kdl",
+      "manifest_sha256": "dddce1c16bbbda498eab2a269597c24a1c0914e69a748cda566ee9636cb12aa8",
+      "dependencies": [
+        {
+          "package": "mpu9250-driver",
+          "path": "../mpu9250-driver"
+        }
+      ],
+      "crate": {
+        "package": "mpu9250-driver",
+        "path": "../mpu9250-driver"
+      }
+    }
+  }
+}
