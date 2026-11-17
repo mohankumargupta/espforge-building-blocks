@@ -1,0 +1,35 @@
+// The external `<mfrc522>` driver: a project-local manifest, not a module in
+// espforge-drivers (there is no bundled MFRC522 driver). `codegen.feature` is
+// absent, so the dependency below is written into the generated project's
+// Cargo.toml instead of selecting an espforge-drivers feature.
+driver "mfrc522" {
+    format_version 2
+    summary "NXP MFRC522 contactless reader with a MIFARE Classic card on SPI"
+    description #"Speaks the MFRC522's 4-wire SPI protocol: one address byte (register << 1, bit 7 set for a read), no dummy byte. The constructor soft-resets the reader, checks VersionReg (0x37) for 0x92 or 0x91, applies the standard timer/ASK/mode init and switches the antenna on. read_tag() runs REQA, anticollision CL1 and select CL1 and returns the ATQA, the 4-byte UID and the SAK, or None when no card answers. The Rust half is the `mfrc522-driver` crate beside this manifest, so the driver is external to espforge-drivers."#
+    category "sensor"
+
+    dependency "mfrc522-driver" {
+        path "../mfrc522-driver"
+    }
+
+    bus "spi" {
+        mode 0
+        frequency "1000kHz"
+    }
+
+    codegen {
+        runtime "blocking" {
+            type "mfrc522_driver::Mfrc522<espforge_runtime::ConfiguredSpiDevice>"
+            constructor "mfrc522_driver::Mfrc522::new({bus_device})"
+            endpoint "espforge_runtime::ConfiguredSpiDevice"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the reader during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<mfrc522 id="reader" bus="$spi2" cs="7" />"#
+    see_also "peripherals/spi"
+}

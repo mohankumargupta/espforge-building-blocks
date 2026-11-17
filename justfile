@@ -846,3 +846,114 @@ bme280-spi-sensor: bme280-spi-image bme280-spi-part
 # Remove the disposable images; the fixture and the checked-in wasm stay.
 bme280-spi-clean:
     rm -rf {{ bme280_spi_out }} {{ bme280_spi_part_dir }}/target
+
+
+# ---- MFRC522 virtual part fixture (drivers/mfrc522) ----------------------
+
+mfrc522_rel := "drivers/mfrc522"
+mfrc522_dir := justfile_directory() / mfrc522_rel
+mfrc522_out := build_dir / "mfrc522"
+mfrc522_port := "127.0.0.1:5564"
+mfrc522_part_dir := mfrc522_dir / "parts" / "mfrc522"
+mfrc522_part_wasm := mfrc522_dir / "parts" / "mfrc522.wasm"
+
+# The part's own tests: version, soft reset, FIFO, the three frames, BCC/SAK,
+# the no-card IRQ and the inputs, on the host.
+mfrc522-part-test:
+    cargo test --manifest-path {{ mfrc522_part_dir }}/Cargo.toml
+
+# Build the virtual MFRC522 -> drivers/mfrc522/parts/mfrc522.wasm.
+mfrc522-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ mfrc522_part_dir }}/Cargo.toml"
+    cp "{{ mfrc522_part_dir }}/target/wasm32-unknown-unknown/release/mfrc522.wasm" \
+        "{{ mfrc522_part_wasm }}"
+    ls -l "{{ mfrc522_part_wasm }}"
+
+# The driver's own tests: the version check, the init writes, the three frames
+# and CRC_A, on the host.
+mfrc522-driver-test:
+    cargo test --manifest-path {{ mfrc522_dir }}/mfrc522-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+mfrc522-check:
+    just check {{ mfrc522_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+mfrc522-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ mfrc522_out }}"
+    just check "{{ mfrc522_rel }}"
+    just build "{{ mfrc522_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ mfrc522_out }}/mfrc522.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/mfrc522_test" \
+        "{{ mfrc522_out }}/mfrc522.elf"
+    ls -l "{{ mfrc522_out }}/mfrc522.bin" "{{ mfrc522_out }}/mfrc522.elf"
+
+# Run the firmware with the virtual reader on the control channel.
+mfrc522-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ mfrc522_out }}/mfrc522.bin --cosim-board {{ mfrc522_dir }}/board.json --control-tcp {{ mfrc522_port }} --elf {{ mfrc522_out }}/mfrc522.elf --timeout {{ timeout }} --log-file {{ mfrc522_out }}/emu.log"
+
+# One control line, e.g. "part reader input absent".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+mfrc522-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ mfrc522_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/mfrc522/drivers/mfrc522.kdl.
+mfrc522-driver-record:
+    just espforge "driver {{ mfrc522_rel }} add --local {{ mfrc522_rel }}/drivers/mfrc522.kdl"
+
+# Happy path: boot, select DEADBEEF, take the card away, give it another UID.
+mfrc522-sensor: mfrc522-image mfrc522-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ mfrc522_out }}/sensor.stdout"
+    log="{{ mfrc522_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just mfrc522-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: mfrc522 boot" "firmware boots" 40
+    wait_for_log "is the SPI device on chip select GPIO 7" "the part attached on the firmware's CS" 10
+    wait_for "TEST: tag uid=deadbeef sak=0x08 atqa=0x0004" "tag DEADBEEF selected with SAK 0x08" 20
+    just mfrc522-part-input "part reader input absent" >/dev/null
+    wait_for "TEST: tag none" "absent -> no tag" 20
+    just mfrc522-part-input "part reader input set:uid=01:02:03:04" >/dev/null
+    just mfrc522-part-input "part reader input present" >/dev/null
+    wait_for "TEST: tag uid=01020304 sak=0x08 atqa=0x0004" "set:uid=01020304 -> 01020304" 20
+    echo "mfrc522-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+mfrc522-clean:
+    rm -rf {{ mfrc522_out }} {{ mfrc522_part_dir }}/target

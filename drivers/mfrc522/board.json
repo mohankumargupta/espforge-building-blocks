@@ -1,0 +1,3 @@
+{ "parts": {
+    "reader": { "module": "parts/mfrc522.wasm", "pins": { "CS": 7, "SCK": 6, "MOSI": 3, "MISO": 2 } }
+} }
