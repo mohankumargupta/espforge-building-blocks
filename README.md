@@ -11,7 +11,15 @@ overlay files next to the `.espf.txt` (`partitions.csv`, `Cargo.extra.toml`,
 `.cargo/*.toml`, the Wokwi files) replace or extend what the generator writes;
 `build/` is disposable output.
 
-espforge itself lives at `./espforge` (git-ignored: it is its own checkout).
+espforge itself lives at `./espforge` (git-ignored: it is its own checkout), the
+emulator at `./esp-emulator` (same), and the virtual parts the driver fixtures
+use are built against `esp-emulator/esp-part`.
+
+The blocks are only half the repository. `drivers/` holds eight fixtures that
+put a real driver crate in front of a virtual part, and
+`espressifemulator/002-wifi-ota/` holds the harness for the OTA path in block
+002. Everything is ESP32-C3, and every `espforge` or `esp-emu` invocation goes
+through a recipe in the root `justfile`.
 
 ## Layout
 
@@ -21,7 +29,20 @@ blocks/
     README.md          # the ESPHome YAML for this block + translation notes
     minimal.espf.txt   # the espforge project file
     src/app.rs         # the application half
+drivers/
+  sht31/               # one fixture per part: .espf.txt, src/app.rs, board.json
+  ...                  # project-local drivers add drivers/*.kdl + a crate
+espressifemulator/
+  002-wifi-ota/        # the OTA variant, its payload and the by-hand guide
+build/                 # disposable: generated projects, images, logs
+espforge/              # its own checkout (git-ignored)
+esp-emulator/          # emulator sources the parts build against (git-ignored)
+esp-hal/               # untracked vendored overlay, see the I²C section below
 ```
+
+`just check <dir>` validates a project and `just build <dir>` generates and
+compiles it under `build/`; those two, plus the per-fixture recipes, are the
+supported entry points.
 
 Every block's README opens with its status:
 
@@ -174,18 +195,9 @@ webhook (057), multi-click (065), humidity control (078), status LED (087), PIR
 
 ## Phase files: blocks 041–100
 
-The one-file-per-phase documents at the repository root are the source for the
-second half. Each block's README opens with the YAML from its phase file, then
-says what espforge can and cannot do with it.
-
-| File | Blocks | Theme |
-|---|---|---|
-| [`41to50.md`](41to50.md) | 041–050 | I²S microphone and speaker, TWAI/CAN, stepper profiling, HX711, INA226, RGBWW, BLE proxy, scripts, Improv serial |
-| [`51to60.md`](51to60.md) | 051–060 | PID loop, e-paper, I²C port expander, mmWave radar, VOC index, Wiegand, webhooks, sun tracking, BLE HID, WireGuard |
-| [`61to70.md`](61to70.md) | 061–070 | NMEA GPS, LED strip zones, DFPlayer, AC phase cutting, multi-click, DS3231 RTC, SD card/FAT32, display menus, iBeacon, syslog |
-| [`71to80.md`](71to80.md) | 071–080 | MPU-6050, energy monitoring, H-bridge, PMS5003, VL53L0X, TM1637, LED matrix, humidity control, mDNS, SNMP |
-| [`81to90.md`](81to90.md) | 081–090 | Geiger counter, BH1750, soil moisture, irrigation, tachometer, HD44780, status LED, PIR, ICMP ping, alarm panel |
-| [`91to100.md`](91to100.md) | 091–100 | AS5600, MAX31865, TCS34725, safety cover, DMX512, latching valves, BLE GATT server, factory reset, OTA rollback, capstone |
+The six phase files that seeded blocks 041–100 (`41to50.md` … `91to100.md`)
+were removed from the tree; each block's README still opens with the YAML they
+carried.
 
 The second half leans on the same missing vocabulary as the first — ADC (006,
 083), LEDC/PWM (008, 047, 051, 073, 085), RMT (015, 062, 077), BLE (026, 038,
@@ -193,3 +205,122 @@ The second half leans on the same missing vocabulary as the first — ADC (006,
 plus a set of driver-only gaps where the bus exists but the part's protocol
 does not (045, 046, 053, 055, 071, 076, 082, 086, 091, 092, 093). It is the
 same project continued into audio, automotive buses and stage lighting.
+
+## Driver fixtures: `drivers/`
+
+The blocks answer "what vocabulary is missing?". `drivers/` answers the next
+question: does a real driver crate reach a real part through espforge's runtime,
+with nothing glued in by hand? Each fixture is an espforge project (`.espf.txt`
+plus `src/app.rs`) and a virtual part that `esp-emu` loads from a `board.json`;
+where the part's source is checked in beside the fixture, `just <fixture>-part`
+builds it to `.wasm`.
+
+| Fixture | Part, bus | Driver | One command |
+|---|---|---|---|
+| [`adxl345`](drivers/adxl345/README.md) | ADXL345 accelerometer, SPI | bundled `<adxl345>` | `just adxl345-sensor` |
+| [`bme280_spi`](drivers/bme280_spi/) | BME280 temperature/pressure/humidity, SPI | project-local `<bme280_spi>` | `just bme280-spi-sensor` |
+| [`mfrc522`](drivers/mfrc522/README.md) | MFRC522 reader and a MIFARE Classic card, SPI | project-local `<mfrc522>` | `just mfrc522-sensor` |
+| [`mhz19b`](drivers/mhz19b/README.md) | MH-Z19B CO₂, UART | bundled `<mhz19b>` | `just mhz19b-sensor` |
+| [`mpu9250`](drivers/mpu9250/README.md) | MPU-9250 accelerometer and gyro, SPI | project-local `<mpu9250>` | `just mpu9250-sensor` |
+| [`sht31`](drivers/sht31/) | SHT31 temperature and humidity, I²C 0x44 | bundled `<sht31>` | `just sht31-sensor` |
+| [`tmp123`](drivers/tmp123/README.md) | TMP123 thermometer, SPI | project-local `<tmp123>` | `just tmp123-sensor` |
+| [`i2cscanner`](drivers/i2cscanner/) | no part: the emulator's own EEPROM at 0x50 | — (the gate) | `just i2cscanner-test` |
+
+"Bundled" means the element comes from `espforge-drivers`, as `<scd4x>` and
+`<uart>` do. "Project-local" means the fixture carries the whole definition: a
+manifest under `drivers/<fixture>/drivers/*.kdl` naming a crate beside it by
+`path`, with no `codegen.feature`. Neither shape changes anything under
+`espforge/`; the first build pins the manifest text in
+`.espforge/drivers.lock`, and `just <fixture>-driver-record` re-records it after
+an edit (the crate, `app.rs` and `board.json` need no re-record).
+
+The SHT31 fixture also has `just sht31-scan` (a bus scan from a freshly
+generated project) and `just sht31-negative` (a part at the wrong address, and
+the right part on the wrong SCL, must both fail initialization).
+
+Every fixture follows the same recipe ladder:
+
+```sh
+just adxl345-part-test     # the part's protocol on the host, no emulator
+just adxl345-part          # build the virtual part -> parts/adxl345.wasm
+just adxl345-check         # schema and resource graph
+just adxl345-image         # generate and compile -> build/adxl345/adxl345.bin
+just adxl345-run           # boot with the control channel open
+just adxl345-sensor        # all of the above, assert the happy path
+```
+
+The project-local fixtures add `<fixture>-driver-test`, the same protocol
+assertions against the driver crate on the host (`tmp123`, `bme280-spi`,
+`mfrc522`, `mpu9250`).
+
+`-sensor` prints one `PASS` line per assertion and exits non-zero on the first
+miss. `-run` leaves a control channel on `127.0.0.1:5559`–`5565` (SHT31,
+MH-Z19B, TMP123, ADXL345, BME280, MFRC522, MPU-9250), so
+`just <fixture>-part-input "part <id> input set:x=0.5"` can move the part while
+it runs. A fixture is evidence that the runtime can carry a driver; it is not
+new vocabulary, so the block statuses above are unchanged.
+
+## OTA end to end: `espressifemulator/002-wifi-ota/`
+
+Block 002 as shipped stops short of a download — its image constants are zero —
+so the OTA harness lives beside it rather than in it. `v1/` is the same project
+with a real download loop, whose size and CRC32 `just ota-patch-v1` writes into
+`src/app.rs` from the payload it is about to serve; `blink-confirm/` is a
+payload that calls `mark_app_valid()`, so rollback has something to judge.
+
+`testota.md` is the full T0–T7 matrix, including the failures; the by-hand
+walkthrough is `espressifemulator/002-wifi-ota/README.md`. The recipes build
+and run each case:
+
+| Recipe | What it does |
+|---|---|
+| `just ota-fixtures` | merged `base.bin`, `v1.bin` and the `blink-confirm` payload |
+| `just ota-t0` | boot block 002 as shipped and watch it associate |
+| `just ota-t2` | run v1 with the control channel; it updates itself over HTTP |
+| `just ota-t3` | boot the payload, reset, prove the bootloader rolls back |
+| `just ota-t5` | serve a same-length payload with one flipped byte; it must be rejected |
+| `just ota-t7` | no update server; the download must fail and v1 keep running |
+| `just ota-serve`, `ota-reset`, `ota-otadata` | fixture server, hard reset, 32-byte otadata dump |
+
+The images are not interchangeable: `v1.bin` is merged (bootloader, partition
+table and app) because it is flashed, while `blink.bin` is an app image only
+because it is the payload that `ctx.ota` writes into `ota_1`.
+
+## I²C under the emulator
+
+`esp-emu` 1.1.0 does not model the I²C master's `SR.RESP_REC` bit, and esp-hal
+1.2.2 rejects any transaction that has `TRANS_COMPLETE` set and `RESP_REC`
+clear. Every successful I²C transfer therefore fails
+`AcknowledgeCheckFailed(Data)`: the scanner finds nothing, a driver's
+constructor fails, and the firmware stops before `app.rs` runs.
+
+The workaround is a vendored `esp-hal` 1.2.2 in `esp-hal/` with two edits (an
+`esp-emu` feature and a `cfg` around that one check), plus a two-line
+`Cargo.extra.toml` in each I²C project that switches the feature on and patches
+`esp-hal` to the path. `esp-hal/` is untracked and **not** ignored: a fresh
+clone has to re-create it with the steps in
+[`i2c-drivers-workaround.md`](i2c-drivers-workaround.md) §8, and any I²C project
+added later needs the same overlay (§5).
+
+That document is also the "before blaming the driver" checklist: its §4 walks
+`just i2cscanner-test`, `cargo tree -e features -i esp-hal` and the lock file,
+which together prove the patched HAL is the one being compiled. Never flash an
+`esp-emu` build: with the feature on, a genuine data-phase ACK failure is not
+reported.
+
+## Working documents
+
+The root documents are the design trail behind the fixtures and the second half
+of the blocks; the block READMEs are the summaries.
+
+| File | What it is |
+|---|---|
+| [`testsht31.md`](testsht31.md) | the SHT31 fixture's test plan, T0–T8; §1a is the original red I²C gate |
+| [`i2c-drivers-workaround.md`](i2c-drivers-workaround.md) | the I²C root cause, the overlay, the verification steps, and how to re-vendor `esp-hal` |
+| [`repro.md`](repro.md) | the minimal standalone I²C repro, with every transaction shape |
+| [`rea.md`](rea.md) | binary-level reverse engineering of `esp-emu`'s I²C controller model |
+| [`testota.md`](testota.md) | the OTA test matrix, T0–T7 |
+| [`logging.md`](logging.md) | the proposal for `<logger>` and per-subsystem levels |
+| [`plantmp123.md`](plantmp123.md) | the long-form plan for the external-driver shape every later fixture copies |
+| [`planadxl345.md`](planadxl345.md), [`planbme280_spi.md`](planbme280_spi.md), [`planmfrc522.md`](planmfrc522.md), [`planmpu9250.md`](planmpu9250.md) | per-fixture plans: the part's protocol, the driver's slots, the assertions |
+| [`tb.txt`](tb.txt) | a raw `esp-emu` transcript of the scanner |
