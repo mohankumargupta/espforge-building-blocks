@@ -1407,3 +1407,120 @@ aht20-sensor: aht20-image aht20-part
 # Remove the disposable images; the fixture and the checked-in wasm stay.
 aht20-clean:
     rm -rf {{ aht20_out }} {{ aht20_part_dir }}/target
+
+
+# ---- AiP31068 virtual part fixture (drivers/aip31068) ----------------------
+
+aip31068_rel := "drivers/aip31068"
+aip31068_dir := justfile_directory() / aip31068_rel
+aip31068_out := build_dir / "aip31068"
+aip31068_port := "127.0.0.1:5569"
+aip31068_part_dir := aip31068_dir / "parts" / "aip31068"
+aip31068_part_wasm := aip31068_dir / "parts" / "aip31068.wasm"
+
+# The part's own tests: the instruction set, DDRAM and the state, on the host.
+aip31068-part-test:
+    cargo test --manifest-path {{ aip31068_part_dir }}/Cargo.toml
+
+# Build the virtual AiP31068 -> drivers/aip31068/parts/aip31068.wasm.
+aip31068-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ aip31068_part_dir }}/Cargo.toml"
+    cp "{{ aip31068_part_dir }}/target/wasm32-unknown-unknown/release/aip31068.wasm" \
+        "{{ aip31068_part_wasm }}"
+    ls -l "{{ aip31068_part_wasm }}"
+
+# The driver's own tests: the initialization and the two rows, on the host.
+aip31068-driver-test:
+    cargo test --manifest-path {{ aip31068_dir }}/aip31068-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+aip31068-check:
+    just check {{ aip31068_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+aip31068-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ aip31068_out }}"
+    just check "{{ aip31068_rel }}"
+    just build "{{ aip31068_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ aip31068_out }}/aip31068.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/aip31068_test" \
+        "{{ aip31068_out }}/aip31068.elf"
+    ls -l "{{ aip31068_out }}/aip31068.bin" "{{ aip31068_out }}/aip31068.elf"
+
+# Run the firmware with the virtual panel on the control channel.
+aip31068-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ aip31068_out }}/aip31068.bin --cosim-board {{ aip31068_dir }}/board.json --control-tcp {{ aip31068_port }} --elf {{ aip31068_out }}/aip31068.elf --timeout {{ timeout }} --log-file {{ aip31068_out }}/emu.log"
+
+# One control line, e.g. "part lcd state".
+aip31068-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ aip31068_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing
+# drivers/aip31068/drivers/aip31068.kdl.
+aip31068-driver-record:
+    just espforge "driver {{ aip31068_rel }} add --local {{ aip31068_rel }}/drivers/aip31068.kdl"
+
+# Happy path: boot, the two lines written, and the panel's DDRAM read back.
+aip31068-sensor: aip31068-image aip31068-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ aip31068_out }}/sensor.stdout"
+    log="{{ aip31068_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just aip31068-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for_state() {
+        local i state
+        for i in $(seq 1 "$3"); do
+            state=$(just aip31068-part-input "part lcd state" 2>/dev/null || true)
+            case "$state" in
+                *"$1"*) echo "PASS: $2"; return 0 ;;
+            esac
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); got '$state'" >&2
+        return 1
+    }
+    wait_for "TEST: aip31068 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x3" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: lcd aip31068-lcd / hello-i2c" "the firmware wrote both lines" 20
+    wait_for_state "line1=aip31068-lcd line2=hello-i2c" "the panel shows aip31068-lcd and hello-i2c" 20
+    echo "aip31068-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+aip31068-clean:
+    rm -rf {{ aip31068_out }} {{ aip31068_part_dir }}/target

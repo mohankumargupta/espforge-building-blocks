@@ -1,0 +1,34 @@
+// The external `<aip31068>` driver: a project-local manifest, not a module in
+// espforge-drivers. `codegen.feature` is absent, so the dependency below is
+// written into the generated project's Cargo.toml instead of selecting an
+// espforge-drivers feature.
+driver "aip31068" {
+    format_version 2
+    summary "AiP31068 16x2 character LCD controller on I2C"
+    description "Writes text to a 16-character, 2-line character LCD over an I2C bus. A transaction is a control byte (0x00 for an instruction, 0x40 for display data) followed by the bytes it applies to; the instruction set is the HD44780's, so the driver initializes the part with a function set, display on, clear and entry mode, then addresses a row in DDRAM and writes. The Rust half is the `aip31068-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    category "display"
+
+    dependency "aip31068-driver" {
+        path "../aip31068-driver"
+    }
+
+    bus "i2c" {
+        address allowed="0x3e..=0x3e"
+    }
+
+    codegen {
+        runtime "blocking" {
+            type "aip31068_driver::Aip31068<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
+            constructor "aip31068_driver::Aip31068::new({bus_device}, {address})"
+            endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the panel during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<aip31068 id=\"lcd\" bus=\"$i2c0\" address=\"0x3E\" />"#
+    see_also "peripherals/i2c"
+}

@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "aip31068": {
+      "kind": "local",
+      "source": "./drivers/aip31068.kdl",
+      "manifest_sha256": "0b78d0b1f0a7de3db6b2bf19bf4b69ad1bc3d3a7584fe53f1b6796d8685698f8",
+      "dependencies": [
+        {
+          "package": "aip31068-driver",
+          "path": "../aip31068-driver"
+        }
+      ],
+      "crate": {
+        "package": "aip31068-driver",
+        "path": "../aip31068-driver"
+      }
+    }
+  }
+}

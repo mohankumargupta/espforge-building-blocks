@@ -1,0 +1,21 @@
+====================
+AiP31068 test firmware
+
+Fixture for drivers/aip31068: the project-local `<aip31068>` driver over I2C,
+wired to the virtual AiP31068 part (SCL = GPIO 6, SDA = GPIO 5, address 0x3E).
+Prints `TEST:` lines the recipes assert on; the panel's own content is read
+back with `part lcd state`.
+====================
+
+# espforge
+  <project name="aip31068_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <aip31068 id="lcd" bus="$i2c0" address="0x3E" />
+
+# services
