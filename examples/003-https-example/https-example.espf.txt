@@ -1,0 +1,35 @@
+====================
+003 - HTTPS CLIENT: ONE GET OVER TLS 1.3
+
+The espforge `05.Networking/https_client` example on this repository's terms:
+join Wi-Fi, then GET a page from the internet with the <https_client> service.
+
+TLS 1.3 (embedded-tls) runs over the station's stack, so this is 002's path
+plus a handshake and an encrypted record layer. `network="$home"` names the
+station, and DNS still comes from the DHCP lease. `insecure="true"` is
+declared because certificate verification is not implemented yet: the
+runtime's handshake currently runs unverified, so the flag only records what
+the board asked for (the source says so in services/https_client.rs).
+
+Will it reach the real internet? Under `esp-emu --net user`, yes: outbound TCP
+is NATed through host sockets, DNS is forwarded from the host's
+/etc/resolv.conf, and port 443 needs to be open from the host.
+
+The TLS record buffers come off the heap (98304 bytes the generated
+`Services::new` reserves), and `rx_buffer_size` has a 4096-byte minimum, so
+leave the buffer defaults alone.
+====================
+
+# espforge
+  <project name="https_example" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />  // match --wifi-ssid / --wifi-password
+  <https_client id="client" network="$home" insecure="true" />

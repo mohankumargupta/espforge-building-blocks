@@ -2403,3 +2403,57 @@ http-example-test: http-example-image
         exit 1
     fi
     echo "PASS: associated, leased an address and fetched the public URL"
+
+
+# ---- examples/003-https-example (one GET over TLS 1.3) -------------------
+
+https_example_dir := justfile_directory() / "examples" / "003-https-example"
+https_example_out := build_dir / "https-example"
+
+# Schema, resource graph, the `network="$home"` reference and the TLS heap.
+https-example-check:
+    just check {{ https_example_dir }}
+
+# Compile the example as a merged image -> build/https-example/https-example.bin.
+https-example-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ https_example_out }}"
+    just check "{{ https_example_dir }}"
+    just build "{{ https_example_dir }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ https_example_out }}/https-example.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/https_example" \
+        "{{ https_example_out }}/https-example.elf"
+    ls -l "{{ https_example_out }}/https-example.bin" "{{ https_example_out }}/https-example.elf"
+
+# Run it. `--net user` NATs the guest's TCP through host sockets and forwards
+# DNS from the host's /etc/resolv.conf, so the TLS handshake reaches the web.
+https-example-run timeout="120s" ssid="MyNetwork" password="MyPassword":
+    just esp-emu "--chip esp32c3 --firmware {{ https_example_out }}/https-example.bin --net user --wifi-ssid {{ ssid }} --wifi-password {{ password }} --elf {{ https_example_out }}/https-example.elf --timeout {{ timeout }} --log-file {{ https_example_out }}/emu.log"
+
+# Gate: association, a lease, and a successful GET over TLS.
+# Needs the host to have DNS and outbound TCP to 443.
+https-example-test: https-example-image
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ https_example_out }}/test.stdout"
+    : > "{{ https_example_out }}/emu.log"
+    : > "$out"
+    setsid just https-example-run 120s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    got=0
+    for _ in $(seq 1 120); do
+        grep -qE 'TEST: https (ok|failed)' "$out" && { got=1; break; }
+        sleep 1
+    done
+    grep -E 'TEST: (ip |https )' "$out" || true
+    (( got )) || { echo "FAIL: no GET result within 120s; see $out" >&2; exit 1; }
+    if ! grep -q 'TEST: https ok' "$out"; then
+        echo "FAIL: the TLS GET did not succeed; see $out and {{ https_example_out }}/emu.log" >&2
+        exit 1
+    fi
+    echo "PASS: associated, leased an address and fetched the public URL over TLS"
