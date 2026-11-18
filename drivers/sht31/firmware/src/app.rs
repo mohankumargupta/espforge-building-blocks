@@ -8,7 +8,7 @@
 //! - `TEST: status=0x8010`
 //! - `TEST: reading t=22.50 rh=45.00` once a second
 //!
-//! Pins match `drivers/001-sht31/board.json` (SCL 6, SDA 5) and the address is
+//! Pins match `drivers/sht31/board.json` (SCL 6, SDA 5) and the address is
 //! 0x44, the part's ADDR-low default.
 
 use crate::Context;

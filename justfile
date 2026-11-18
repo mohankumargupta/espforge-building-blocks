@@ -9,7 +9,7 @@ ota_dir := build_dir / "ota"
 ota_src := build_dir / "ota-src"
 ota_tool := ota_project / "scripts" / "image-info.py"
 
-sht31_dir := justfile_directory() / "drivers" / "001-sht31"
+sht31_dir := justfile_directory() / "drivers" / "sht31"
 sht31_project := sht31_dir / "firmware"
 sht31_out := build_dir / "sht31"
 sht31_src := build_dir / "sht31-src"
@@ -276,7 +276,7 @@ ota-clean:
     rm -rf "{{ ota_dir }}" "{{ ota_dir }}-bad" "{{ ota_src }}"
 
 
-# ---- 001-sht31 driver fixture (testsht31.md) ----------------------------
+# ---- sht31 driver fixture (testsht31.md) --------------------------------
 
 # Schema and resource graph for the SHT31 test firmware.
 sht31-check:
@@ -303,8 +303,13 @@ sht31-run timeout="90s" board=(sht31_dir / "board.json"):
     just esp-emu "--chip esp32c3 --firmware {{ sht31_out }}/sht31.bin --cosim-board {{ board }} --control-tcp {{ sht31_port }} --elf {{ sht31_out }}/sht31.elf --timeout {{ timeout }} --log-file {{ sht31_out }}/emu.log"
 
 # Send one control line to the running emulator, e.g. "part sensor input warmer".
+#
+# `sht31_port` stays host:port for esp-emu; netcat-openbsd wants them separate.
 sht31-part args:
-    printf '%s\n' "{{ args }}" | nc -q1 {{ sht31_port }}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ sht31_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
 
 # T1: scan the bus from the espforge i2c_scanner example, on the board's pins.
 sht31-scan:
@@ -315,6 +320,9 @@ sht31-scan:
     just espforge "new --example i2c_scanner --chip esp32c3 --dir build/sht31-src/scanner"
     sed -i -E 's/sda="[0-9]+" scl="[0-9]+"/sda="5" scl="6"/' \
         "{{ sht31_src }}/scanner/i2c_scanner.espf"
+    # The generated project needs the same esp-hal I2C overlay as the firmware:
+    # without it every transaction fails `AcknowledgeCheckFailed(Data)`.
+    cp "{{ sht31_project }}/Cargo.extra.toml" "{{ sht31_src }}/scanner/Cargo.extra.toml"
     just build "{{ sht31_src }}/scanner"
     (cd "{{ build_dir }}/build" \
         && cargo espflash save-image --merge \

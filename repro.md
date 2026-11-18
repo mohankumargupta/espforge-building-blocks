@@ -215,7 +215,7 @@ just sht31-sensor
 ```
 
 This runs the real `<sht31 id="air" bus="$i2c0" address="0x44" />` firmware
-against `drivers/001-sht31/board.json` and the virtual part. The part attaches
+against `drivers/sht31/board.json` and the virtual part. The part attaches
 and ACKs (`ack:true` in the bus log), but `Devices::new` cannot complete its
 first transaction (`0x30A2`, the crate's soft reset; the error is the same
 `AcknowledgeCheckFailed(Data)` as §3, see `testsht31.md` §1a), so the app never

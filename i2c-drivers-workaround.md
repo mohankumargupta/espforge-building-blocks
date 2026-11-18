@@ -1,11 +1,12 @@
 # I²C drivers on esp-hal + esp-emu: the root cause and the local workaround
 
-**Status as of 2026-11-18:** `just i2cscanner-test` **passes** — the scan finds the
-emulator's built-in EEPROM at 0x50 and nothing else. That is the only I²C gate
-that has been run green so far. Every other I²C fixture (SHT31 and friends)
-still needs the same two-file overlay described in
-[§5](#5-putting-the-workaround-in-a-new-i²c-project) before it can be tested at
-all.
+**Status as of 2026-11-18:** `just i2cscanner-test` and the whole SHT31 fixture
+(`just sht31-sensor`, `just sht31-scan`, `just sht31-negative`) **pass** — the
+scan finds the emulator's built-in EEPROM at 0x50, and the sensor answers at
+0x44 on the board. The two-file overlay described in
+[§5](#5-putting-the-workaround-in-a-new-i²c-project) is what makes them pass.
+Every other I²C fixture (SHT4x, SCD4x, BME680, ADS111x, SSD1306) still needs
+that overlay before it can be tested at all.
 
 This document is the complete "why" behind that overlay, so that whoever tests
 the next I²C driver does not rediscover it. Read it before concluding that a
@@ -321,7 +322,7 @@ The `path` is relative to the **merged manifest**, which espforge always writes
 to `build/build/Cargo.toml` — *not* to the directory the `Cargo.extra.toml`
 lives in, and not to the `.espf.txt`. So it is `"../../esp-hal"` for every
 project in the repo, however deep its source sits (`drivers/i2cscanner`,
-`drivers/001-sht31/firmware`, the regenerated `build/sht31-src/scanner`, …).
+`drivers/sht31/firmware`, the regenerated `build/sht31-src/scanner`, …).
 Only a project generated into a different `--out` directory would need a
 different number of `../`.
 
@@ -334,8 +335,9 @@ Status of the I²C fixtures in this repo:
 | Fixture | Project dir | Overlay present? |
 |---|---|---|
 | `just i2cscanner-test` | `drivers/i2cscanner/` | **yes** — green |
-| `just sht31-image` / `sht31-sensor` | `drivers/001-sht31/firmware/` | no — still red at `Devices::new` |
-| `just sht31-scan` | regenerated at `build/sht31-src/scanner/` | no — the recipe creates a fresh project, so it needs an extra file written (or copied in) by the recipe |
+| `just tmp123-*` and the other external-driver fixtures | own crate, not espforge-generated | n/a — no `esp-hal` I²C use |
+| `just sht31-image` / `sht31-sensor` / `sht31-negative` | `drivers/sht31/firmware/` | **yes** — green |
+| `just sht31-scan` | regenerated at `build/sht31-src/scanner/` | **yes** — the recipe copies the firmware's `Cargo.extra.toml` in, since it creates a fresh project |
 
 Drivers that ride on I²C and therefore inherit all of this
 (`espforge/espforge-drivers/manifests/`): `sht31`, `sht4x`, `scd4x`, `bme680`,

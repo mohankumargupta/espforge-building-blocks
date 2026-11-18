@@ -2,7 +2,7 @@
 //!
 //! Run against the emulator with no `--cosim-board`, the bus is the
 //! emulator's own: its built-in EEPROM answers at 0x50. The pad choice
-//! (SDA 5 / SCL 6) matches `drivers/001-sht31/board.json` so the scan tests
+//! (SDA 5 / SCL 6) matches `drivers/sht31/board.json` so the scan tests
 //! the same pins the SHT31 fixture uses.
 
 use crate::Context;

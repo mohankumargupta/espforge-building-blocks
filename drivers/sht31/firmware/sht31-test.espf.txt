@@ -2,7 +2,7 @@
 001 - SHT31 test firmware
 
 Fixture for testsht31.md: the `<sht31>` manifest driver over I2C, wired to the
-virtual SHT31 part in drivers/001-sht31/board.json (SCL = GPIO 6, SDA = GPIO 5,
+virtual SHT31 part in drivers/sht31/board.json (SCL = GPIO 6, SDA = GPIO 5,
 ADDR low = 0x44). Prints `TEST:` lines the test recipes assert on.
 ====================
 
