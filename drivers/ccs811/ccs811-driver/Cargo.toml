@@ -1,0 +1,14 @@
+# The Rust half of the external `<ccs811>` driver. Generic over
+# `embedded_hal::i2c::I2c`, so it does not depend on esp-hal, and the
+# manifest instantiates it with the endpoint espforge builds.
+[workspace]
+
+[package]
+name = "ccs811-driver"
+version = "0.1.0"
+edition = "2021"
+description = "Platform-agnostic AMS CCS811 eCO2 and TVOC air quality driver"
+license = "MIT"
+
+[dependencies]
+embedded-hal = "1.0"

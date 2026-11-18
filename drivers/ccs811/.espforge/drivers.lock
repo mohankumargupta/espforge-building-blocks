@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "ccs811": {
+      "kind": "local",
+      "source": "./drivers/ccs811.kdl",
+      "manifest_sha256": "4ab958781dc0f0fdb5ee43a22f610dbe91d51dcd978a98b824aa7ee20d2a1b6b",
+      "dependencies": [
+        {
+          "package": "ccs811-driver",
+          "path": "../ccs811-driver"
+        }
+      ],
+      "crate": {
+        "package": "ccs811-driver",
+        "path": "../ccs811-driver"
+      }
+    }
+  }
+}

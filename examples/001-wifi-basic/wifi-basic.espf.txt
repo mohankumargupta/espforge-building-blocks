@@ -1,0 +1,31 @@
+====================
+001 - WIFI BASICS: GET AN IP ADDRESS
+
+The smallest networking project: join an access point and wait for DHCP to
+hand out an address. src/app.rs prints it, so a run either ends in
+"TEST: ip 192.168.4.2" or in nothing at all.
+
+Two elements are needed, and it is worth knowing why:
+
+  <wifi>          the radio peripheral (hardware)
+  <wifi_station>  the software service that uses it: credentials, the
+                  embassy-net stack, and the DHCP client
+
+`<wifi_station>` requires `<runtime type="embassy" />`: esp-hal's Wi-Fi driver
+is async, and embassy-net's DHCP client has to be driven by a task.
+
+Read gentle-intro-wifi.md in this directory for the long version.
+====================
+
+# espforge
+  <project name="wifi_basic" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />  // match the emulator's --wifi-ssid / --wifi-password

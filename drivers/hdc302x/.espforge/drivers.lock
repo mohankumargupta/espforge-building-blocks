@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "hdc302x": {
+      "kind": "local",
+      "source": "./drivers/hdc302x.kdl",
+      "manifest_sha256": "298a88303dd1a4ecaf4464755bd9fe32f8e48a6f122dd46bfd99e3b24b27b5a9",
+      "dependencies": [
+        {
+          "package": "hdc302x-driver",
+          "path": "../hdc302x-driver"
+        }
+      ],
+      "crate": {
+        "package": "hdc302x-driver",
+        "path": "../hdc302x-driver"
+      }
+    }
+  }
+}

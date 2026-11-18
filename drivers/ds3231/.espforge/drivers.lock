@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "ds3231": {
+      "kind": "local",
+      "source": "./drivers/ds3231.kdl",
+      "manifest_sha256": "851e0d3216d1998b4159489fb3fcb2fea727ce09bf1d7601cf458d9d6fc5057a",
+      "dependencies": [
+        {
+          "package": "ds3231-driver",
+          "path": "../ds3231-driver"
+        }
+      ],
+      "crate": {
+        "package": "ds3231-driver",
+        "path": "../ds3231-driver"
+      }
+    }
+  }
+}

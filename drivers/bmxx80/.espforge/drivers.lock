@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "bmxx80": {
+      "kind": "local",
+      "source": "./drivers/bmxx80.kdl",
+      "manifest_sha256": "5c055d303f05597988dfc181f390b28158322d6985a2842b684eb4f60adba7e4",
+      "dependencies": [
+        {
+          "package": "bmxx80-driver",
+          "path": "../bmxx80-driver"
+        }
+      ],
+      "crate": {
+        "package": "bmxx80-driver",
+        "path": "../bmxx80-driver"
+      }
+    }
+  }
+}

@@ -1,0 +1,34 @@
+// The external `<bmxx80>` driver: a project-local manifest, not a module in
+// espforge-drivers. `codegen.feature` is absent, so the dependency below is
+// written into the generated project's Cargo.toml instead of selecting an
+// espforge-drivers feature.
+driver "bmxx80" {
+    format_version 2
+    summary "Bosch BME280 temperature, pressure and humidity sensor on I2C"
+    description "Reads temperature, pressure and humidity from a BME280 over an I2C bus. The driver checks the chip id, soft-resets the part, reads its factory calibration and starts normal-mode measurements with 1x oversampling, then applies the datasheet's integer compensation to the raw ADC values. The Rust half is the `bmxx80-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    category "sensor"
+
+    dependency "bmxx80-driver" {
+        path "../bmxx80-driver"
+    }
+
+    bus "i2c" {
+        address allowed="0x76..=0x77"
+    }
+
+    codegen {
+        runtime "blocking" {
+            type "bmxx80_driver::Bme280<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
+            constructor "bmxx80_driver::Bme280::new({bus_device}, {address})"
+            endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the sensor during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<bmxx80 id=\"weather\" bus=\"$i2c0\" address=\"0x76\" />"#
+    see_also "peripherals/i2c"
+}

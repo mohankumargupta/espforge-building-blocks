@@ -1,0 +1,14 @@
+# The Rust half of the external `<hdc302x>` driver. Generic over
+# `embedded_hal::i2c::I2c`, so it does not depend on esp-hal, and the
+# manifest instantiates it with the endpoint espforge builds.
+[workspace]
+
+[package]
+name = "hdc302x-driver"
+version = "0.1.0"
+edition = "2021"
+description = "Platform-agnostic TI HDC302x temperature and humidity driver"
+license = "MIT"
+
+[dependencies]
+embedded-hal = "1.0"

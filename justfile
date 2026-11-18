@@ -1851,3 +1851,555 @@ bh1750-sensor: bh1750-image bh1750-part
 # Remove the disposable images; the fixture and the checked-in wasm stay.
 bh1750-clean:
     rm -rf {{ bh1750_out }} {{ bh1750_part_dir }}/target
+
+
+# ---- BMxx80 virtual part fixture (drivers/bmxx80) ---------------------------
+
+bmxx80_rel := "drivers/bmxx80"
+bmxx80_dir := justfile_directory() / bmxx80_rel
+bmxx80_out := build_dir / "bmxx80"
+bmxx80_port := "127.0.0.1:5573"
+bmxx80_part_dir := bmxx80_dir / "parts" / "bmxx80"
+bmxx80_part_wasm := bmxx80_dir / "parts" / "bmxx80.wasm"
+
+# The part's own tests: the registers, the calibration and the inputs, on the
+# host.
+bmxx80-part-test:
+    cargo test --manifest-path {{ bmxx80_part_dir }}/Cargo.toml
+
+# Build the virtual BME280 -> drivers/bmxx80/parts/bmxx80.wasm.
+bmxx80-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ bmxx80_part_dir }}/Cargo.toml"
+    cp "{{ bmxx80_part_dir }}/target/wasm32-unknown-unknown/release/bmxx80.wasm" \
+        "{{ bmxx80_part_wasm }}"
+    ls -l "{{ bmxx80_part_wasm }}"
+
+# The driver's own tests: the chip check, the configuration and the
+# compensation, on the host.
+bmxx80-driver-test:
+    cargo test --manifest-path {{ bmxx80_dir }}/bmxx80-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+bmxx80-check:
+    just check {{ bmxx80_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+bmxx80-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ bmxx80_out }}"
+    just check "{{ bmxx80_rel }}"
+    just build "{{ bmxx80_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ bmxx80_out }}/bmxx80.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/bmxx80_test" \
+        "{{ bmxx80_out }}/bmxx80.elf"
+    ls -l "{{ bmxx80_out }}/bmxx80.bin" "{{ bmxx80_out }}/bmxx80.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+bmxx80-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ bmxx80_out }}/bmxx80.bin --cosim-board {{ bmxx80_dir }}/board.json --control-tcp {{ bmxx80_port }} --elf {{ bmxx80_out }}/bmxx80.elf --timeout {{ timeout }} --log-file {{ bmxx80_out }}/emu.log"
+
+# One control line, e.g. "part weather input set:temperature=30".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+bmxx80-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ bmxx80_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/bmxx80/drivers/bmxx80.kdl.
+bmxx80-driver-record:
+    just espforge "driver {{ bmxx80_rel }} add --local {{ bmxx80_rel }}/drivers/bmxx80.kdl"
+
+# Happy path: boot, the default weather, a warmer room and a more humid one.
+bmxx80-sensor: bmxx80-image bmxx80-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ bmxx80_out }}/sensor.stdout"
+    log="{{ bmxx80_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just bmxx80-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: bmxx80 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x76 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: bmxx80 t=25.00 p=1013.25 h=45.00" "the default weather (25.00 C, 1013.25 hPa, 45.00 %RH)" 20
+    just bmxx80-part-input "part weather input set:temperature=30" >/dev/null
+    wait_for "TEST: bmxx80 t=30.00 p=1013.25 h=45.00" "set:temperature=30 -> the reading moves" 20
+    just bmxx80-part-input "part weather input set:humidity=60" >/dev/null
+    wait_for "TEST: bmxx80 t=30.00 p=1013.25 h=60.00" "set:humidity=60 -> the reading moves again" 20
+    echo "bmxx80-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+bmxx80-clean:
+    rm -rf {{ bmxx80_out }} {{ bmxx80_part_dir }}/target
+
+
+# ---- DS3231 virtual part fixture (drivers/ds3231) --------------------------
+
+ds3231_rel := "drivers/ds3231"
+ds3231_dir := justfile_directory() / ds3231_rel
+ds3231_out := build_dir / "ds3231"
+ds3231_port := "127.0.0.1:5574"
+ds3231_part_dir := ds3231_dir / "parts" / "ds3231"
+ds3231_part_wasm := ds3231_dir / "parts" / "ds3231.wasm"
+
+# The part's own tests: the registers, the BCD and the inputs, on the host.
+ds3231-part-test:
+    cargo test --manifest-path {{ ds3231_part_dir }}/Cargo.toml
+
+# Build the virtual DS3231 -> drivers/ds3231/parts/ds3231.wasm.
+ds3231-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ ds3231_part_dir }}/Cargo.toml"
+    cp "{{ ds3231_part_dir }}/target/wasm32-unknown-unknown/release/ds3231.wasm" \
+        "{{ ds3231_part_wasm }}"
+    ls -l "{{ ds3231_part_wasm }}"
+
+# The driver's own tests: the flag, the decode and the temperature, on the
+# host.
+ds3231-driver-test:
+    cargo test --manifest-path {{ ds3231_dir }}/ds3231-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+ds3231-check:
+    just check {{ ds3231_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+ds3231-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ ds3231_out }}"
+    just check "{{ ds3231_rel }}"
+    just build "{{ ds3231_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ ds3231_out }}/ds3231.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/ds3231_test" \
+        "{{ ds3231_out }}/ds3231.elf"
+    ls -l "{{ ds3231_out }}/ds3231.bin" "{{ ds3231_out }}/ds3231.elf"
+
+# Run the firmware with the virtual clock on the control channel.
+ds3231-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ ds3231_out }}/ds3231.bin --cosim-board {{ ds3231_dir }}/board.json --control-tcp {{ ds3231_port }} --elf {{ ds3231_out }}/ds3231.elf --timeout {{ timeout }} --log-file {{ ds3231_out }}/emu.log"
+
+# One control line, e.g. "part rtc input set:hour=8".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+ds3231-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ ds3231_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/ds3231/drivers/ds3231.kdl.
+ds3231-driver-record:
+    just espforge "driver {{ ds3231_rel }} add --local {{ ds3231_rel }}/drivers/ds3231.kdl"
+
+# Happy path: boot, the power-on time, the die temperature, then a set clock.
+ds3231-sensor: ds3231-image ds3231-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ ds3231_out }}/sensor.stdout"
+    log="{{ ds3231_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just ds3231-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: ds3231 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x68 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: ds3231 2026-01-01 00:00:00 w=1" "the power-on time (2026-01-01 00:00:00, day 1)" 20
+    wait_for "TEST: ds3231 t=25.00 c" "the die temperature (25.00 C)" 20
+    just ds3231-part-input "part rtc input set:year=2030" >/dev/null
+    just ds3231-part-input "part rtc input set:month=6" >/dev/null
+    just ds3231-part-input "part rtc input set:day=15" >/dev/null
+    just ds3231-part-input "part rtc input set:weekday=3" >/dev/null
+    just ds3231-part-input "part rtc input set:hour=8" >/dev/null
+    just ds3231-part-input "part rtc input set:minute=30" >/dev/null
+    wait_for "TEST: ds3231 2030-06-15 08:30:00 w=3" "set:* -> 2030-06-15 08:30:00 on day 3" 20
+    just ds3231-part-input "part rtc input set:temperature=21.5" >/dev/null
+    wait_for "TEST: ds3231 t=21.50 c" "set:temperature=21.5 -> 21.50 C" 20
+    echo "ds3231-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+ds3231-clean:
+    rm -rf {{ ds3231_out }} {{ ds3231_part_dir }}/target
+
+
+# ---- CCS811 virtual part fixture (drivers/ccs811) --------------------------
+
+ccs811_rel := "drivers/ccs811"
+ccs811_dir := justfile_directory() / ccs811_rel
+ccs811_out := build_dir / "ccs811"
+ccs811_port := "127.0.0.1:5575"
+ccs811_part_dir := ccs811_dir / "parts" / "ccs811"
+ccs811_part_wasm := ccs811_dir / "parts" / "ccs811.wasm"
+
+# The part's own tests: the status bits, the result bytes and the inputs, on
+# the host.
+ccs811-part-test:
+    cargo test --manifest-path {{ ccs811_part_dir }}/Cargo.toml
+
+# Build the virtual CCS811 -> drivers/ccs811/parts/ccs811.wasm.
+ccs811-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ ccs811_part_dir }}/Cargo.toml"
+    cp "{{ ccs811_part_dir }}/target/wasm32-unknown-unknown/release/ccs811.wasm" \
+        "{{ ccs811_part_wasm }}"
+    ls -l "{{ ccs811_part_wasm }}"
+
+# The driver's own tests: the id check, boot mode and the decode, on the host.
+ccs811-driver-test:
+    cargo test --manifest-path {{ ccs811_dir }}/ccs811-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+ccs811-check:
+    just check {{ ccs811_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+ccs811-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ ccs811_out }}"
+    just check "{{ ccs811_rel }}"
+    just build "{{ ccs811_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ ccs811_out }}/ccs811.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/ccs811_test" \
+        "{{ ccs811_out }}/ccs811.elf"
+    ls -l "{{ ccs811_out }}/ccs811.bin" "{{ ccs811_out }}/ccs811.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+ccs811-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ ccs811_out }}/ccs811.bin --cosim-board {{ ccs811_dir }}/board.json --control-tcp {{ ccs811_port }} --elf {{ ccs811_out }}/ccs811.elf --timeout {{ timeout }} --log-file {{ ccs811_out }}/emu.log"
+
+# One control line, e.g. "part air input set:eco2=800".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+ccs811-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ ccs811_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/ccs811/drivers/ccs811.kdl.
+ccs811-driver-record:
+    just espforge "driver {{ ccs811_rel }} add --local {{ ccs811_rel }}/drivers/ccs811.kdl"
+
+# Happy path: boot, fresh air, a dirtier room and a dustier one.
+ccs811-sensor: ccs811-image ccs811-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ ccs811_out }}/sensor.stdout"
+    log="{{ ccs811_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just ccs811-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: ccs811 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x5A on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: ccs811 eco2=400 tvoc=8" "fresh air (400 ppm eCO2, 8 ppb TVOC)" 20
+    just ccs811-part-input "part air input set:eco2=800" >/dev/null
+    wait_for "TEST: ccs811 eco2=800 tvoc=8" "set:eco2=800 -> 800 ppm" 20
+    just ccs811-part-input "part air input set:tvoc=50" >/dev/null
+    wait_for "TEST: ccs811 eco2=800 tvoc=50" "set:tvoc=50 -> 50 ppb" 20
+    echo "ccs811-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+ccs811-clean:
+    rm -rf {{ ccs811_out }} {{ ccs811_part_dir }}/target
+
+
+# ---- HDC302x virtual part fixture (drivers/hdc302x) ------------------------
+
+hdc302x_rel := "drivers/hdc302x"
+hdc302x_dir := justfile_directory() / hdc302x_rel
+hdc302x_out := build_dir / "hdc302x"
+hdc302x_port := "127.0.0.1:5576"
+hdc302x_part_dir := hdc302x_dir / "parts" / "hdc302x"
+hdc302x_part_wasm := hdc302x_dir / "parts" / "hdc302x.wasm"
+
+# The part's own tests: the commands, the conversion and the inputs, on the
+# host.
+hdc302x-part-test:
+    cargo test --manifest-path {{ hdc302x_part_dir }}/Cargo.toml
+
+# Build the virtual HDC302x -> drivers/hdc302x/parts/hdc302x.wasm.
+hdc302x-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ hdc302x_part_dir }}/Cargo.toml"
+    cp "{{ hdc302x_part_dir }}/target/wasm32-unknown-unknown/release/hdc302x.wasm" \
+        "{{ hdc302x_part_wasm }}"
+    ls -l "{{ hdc302x_part_wasm }}"
+
+# The driver's own tests: the reset, the trigger and the decode, on the host.
+hdc302x-driver-test:
+    cargo test --manifest-path {{ hdc302x_dir }}/hdc302x-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+hdc302x-check:
+    just check {{ hdc302x_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+hdc302x-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ hdc302x_out }}"
+    just check "{{ hdc302x_rel }}"
+    just build "{{ hdc302x_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ hdc302x_out }}/hdc302x.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/hdc302x_test" \
+        "{{ hdc302x_out }}/hdc302x.elf"
+    ls -l "{{ hdc302x_out }}/hdc302x.bin" "{{ hdc302x_out }}/hdc302x.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+hdc302x-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ hdc302x_out }}/hdc302x.bin --cosim-board {{ hdc302x_dir }}/board.json --control-tcp {{ hdc302x_port }} --elf {{ hdc302x_out }}/hdc302x.elf --timeout {{ timeout }} --log-file {{ hdc302x_out }}/emu.log"
+
+# One control line, e.g. "part climate input set:temperature=30".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+hdc302x-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ hdc302x_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing
+# drivers/hdc302x/drivers/hdc302x.kdl.
+hdc302x-driver-record:
+    just espforge "driver {{ hdc302x_rel }} add --local {{ hdc302x_rel }}/drivers/hdc302x.kdl"
+
+# Happy path: boot, the default room, a warmer one and a wetter one.
+hdc302x-sensor: hdc302x-image hdc302x-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ hdc302x_out }}/sensor.stdout"
+    log="{{ hdc302x_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just hdc302x-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: hdc302x boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x44 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: hdc302x t=22.50 rh=45.00" "the default room (22.50 C, 45.00 %RH)" 20
+    just hdc302x-part-input "part climate input set:temperature=30" >/dev/null
+    wait_for "TEST: hdc302x t=30.00 rh=45.00" "set:temperature=30 -> 30.00 C" 20
+    just hdc302x-part-input "part climate input set:humidity=60" >/dev/null
+    wait_for "TEST: hdc302x t=30.00 rh=60.00" "set:humidity=60 -> 60.00 %RH" 20
+    echo "hdc302x-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+hdc302x-clean:
+    rm -rf {{ hdc302x_out }} {{ hdc302x_part_dir }}/target
+
+
+# ---- examples/001-wifi-basic (networking basics) -------------------------
+
+wifi_basic_dir := justfile_directory() / "examples" / "001-wifi-basic"
+wifi_basic_out := build_dir / "wifi-basic"
+
+# Schema, resource graph and the `<wifi>`/`<wifi_station>` pairing.
+wifi-basic-check:
+    just check {{ wifi_basic_dir }}
+
+# Compile the example as a merged image -> build/wifi-basic/wifi-basic.bin.
+wifi-basic-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ wifi_basic_out }}"
+    just check "{{ wifi_basic_dir }}"
+    just build "{{ wifi_basic_dir }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ wifi_basic_out }}/wifi-basic.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/wifi_basic" \
+        "{{ wifi_basic_out }}/wifi-basic.elf"
+    ls -l "{{ wifi_basic_out }}/wifi-basic.bin" "{{ wifi_basic_out }}/wifi-basic.elf"
+
+# Run it against the emulator's soft AP. The SSID and password must match the
+# firmware's `<wifi_station>` (see gentle-intro-wifi.md).
+wifi-basic-run timeout="60s" ssid="MyNetwork" password="MyPassword":
+    just esp-emu "--chip esp32c3 --firmware {{ wifi_basic_out }}/wifi-basic.bin --net user --wifi-ssid {{ ssid }} --wifi-password {{ password }} --elf {{ wifi_basic_out }}/wifi-basic.elf --timeout {{ timeout }} --log-file {{ wifi_basic_out }}/emu.log"
+
+# T-gate: boot, associate, and prove DHCP handed out 192.168.4.2.
+wifi-basic-test: wifi-basic-image
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ wifi_basic_out }}/test.stdout"
+    : > "{{ wifi_basic_out }}/emu.log"
+    : > "$out"
+    setsid just wifi-basic-run 60s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    got=0
+    for _ in $(seq 1 60); do
+        grep -q 'TEST: ip ' "$out" && { got=1; break; }
+        sleep 1
+    done
+    (( got )) || { echo "FAIL: no address within 60s; see $out" >&2; exit 1; }
+    grep -E 'TEST: (wifi boot|ip )' "$out"
+    if ! grep -q 'TEST: ip 192.168.4.2$' "$out"; then
+        echo "FAIL: the station did not get 192.168.4.2; see $out" >&2
+        exit 1
+    fi
+    echo "PASS: associated and acquired 192.168.4.2"
+
+
+# ---- examples/002-http-example (one GET to the internet) -----------------
+
+http_example_dir := justfile_directory() / "examples" / "002-http-example"
+http_example_out := build_dir / "http-example"
+
+# Schema, resource graph and the `network="$home"` provider reference.
+http-example-check:
+    just check {{ http_example_dir }}
+
+# Compile the example as a merged image -> build/http-example/http-example.bin.
+http-example-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ http_example_out }}"
+    just check "{{ http_example_dir }}"
+    just build "{{ http_example_dir }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ http_example_out }}/http-example.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/http_example" \
+        "{{ http_example_out }}/http-example.elf"
+    ls -l "{{ http_example_out }}/http-example.bin" "{{ http_example_out }}/http-example.elf"
+
+# Run it. `--net user` NATs the guest's TCP through host sockets and forwards
+# DNS from the host's /etc/resolv.conf, so the device reaches the real web.
+http-example-run timeout="90s" ssid="MyNetwork" password="MyPassword":
+    just esp-emu "--chip esp32c3 --firmware {{ http_example_out }}/http-example.bin --net user --wifi-ssid {{ ssid }} --wifi-password {{ password }} --elf {{ http_example_out }}/http-example.elf --timeout {{ timeout }} --log-file {{ http_example_out }}/emu.log"
+
+# Gate: association, a lease, and a successful GET of the public URL.
+# Needs the host to have DNS and outbound HTTP; `http-example-local-test`
+# below is the version that needs no internet at all.
+http-example-test: http-example-image
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ http_example_out }}/test.stdout"
+    : > "{{ http_example_out }}/emu.log"
+    : > "$out"
+    setsid just http-example-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    got=0
+    for _ in $(seq 1 90); do
+        grep -qE 'TEST: http (ok|failed)' "$out" && { got=1; break; }
+        sleep 1
+    done
+    grep -E 'TEST: (ip |http )' "$out" || true
+    (( got )) || { echo "FAIL: no GET result within 90s; see $out" >&2; exit 1; }
+    if ! grep -q 'TEST: http ok' "$out"; then
+        echo "FAIL: the GET did not succeed; see $out and {{ http_example_out }}/emu.log" >&2
+        exit 1
+    fi
+    echo "PASS: associated, leased an address and fetched the public URL"

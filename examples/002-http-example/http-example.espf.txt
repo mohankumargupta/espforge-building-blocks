@@ -1,0 +1,37 @@
+====================
+002 - HTTP CLIENT: ONE GET TO A PUBLIC SERVER
+
+The espforge `05.Networking/http_client` example on this repository's terms:
+join Wi-Fi, then GET a page from the internet with the <http_client> service.
+
+Plain HTTP/1.1 on purpose — no TLS, so a failure here is the network path and
+not a certificate. `http_client` resolves the hostname through the DHCP DNS
+server and opens the TCP connection on the station's stack, which is why it
+names it with network="$home".
+
+Will it reach the real internet? Under `esp-emu --net user`, yes: outbound TCP
+is NATed through host sockets and DNS is forwarded from the host's
+/etc/resolv.conf. It needs the host to have working DNS and outbound HTTP.
+
+`<http_client>` needs one espforge behaviour worth knowing: the generated
+`Services::new` builds its network client with `station.stack()` before `main`
+starts the station. `WifiStation::new` therefore builds the embassy-net stack
+up front and `start` only brings up the radio, association and DHCP; without
+that, a project like this one panics at boot with "wifi station not started".
+That fix is in the `espforge/` checkout (dev, commit "wifi fix"), which is
+git-ignored here — keep it at that commit or newer. Older runtimes panic here.
+====================
+
+# espforge
+  <project name="http_example" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />  // match --wifi-ssid / --wifi-password
+  <http_client id="client" network="$home" />
