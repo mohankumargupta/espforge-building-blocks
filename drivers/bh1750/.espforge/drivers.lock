@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "bh1750": {
+      "kind": "local",
+      "source": "./drivers/bh1750.kdl",
+      "manifest_sha256": "ea5289ea632da380df8e450b326849b17c3c5b1d77766bdf3327369075ea744d",
+      "dependencies": [
+        {
+          "package": "bh1750-driver",
+          "path": "../bh1750-driver"
+        }
+      ],
+      "crate": {
+        "package": "bh1750-driver",
+        "path": "../bh1750-driver"
+      }
+    }
+  }
+}

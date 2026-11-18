@@ -1,0 +1,34 @@
+// The external `<am2320>` driver: a project-local manifest, not a module in
+// espforge-drivers. `codegen.feature` is absent, so the dependency below is
+// written into the generated project's Cargo.toml instead of selecting an
+// espforge-drivers feature.
+driver "am2320" {
+    format_version 2
+    summary "AOSONG AM2320 temperature and relative humidity sensor on I2C"
+    description "Reads temperature and relative humidity over an I2C bus. The chip answers a Modbus-style read: 0x03 0x00 0x04 asks for the four holding registers that hold humidity and temperature, and the eight-byte answer is 0x03, 0x04, the two 16-bit registers and their CRC-16. Each register is a tenth of a unit, and the temperature's top bit is its sign. The Rust half is the `am2320-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    category "sensor"
+
+    dependency "am2320-driver" {
+        path "../am2320-driver"
+    }
+
+    bus "i2c" {
+        address allowed="0x5c..=0x5c"
+    }
+
+    codegen {
+        runtime "blocking" {
+            type "am2320_driver::Am2320<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
+            constructor "am2320_driver::Am2320::new({bus_device}, {address})"
+            endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the sensor during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<am2320 id=\"climate\" bus=\"$i2c0\" address=\"0x5C\" />"#
+    see_also "peripherals/i2c"
+}

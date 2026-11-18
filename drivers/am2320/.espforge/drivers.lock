@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "am2320": {
+      "kind": "local",
+      "source": "./drivers/am2320.kdl",
+      "manifest_sha256": "a439f424530ab61dc5d4525f8b6c079110a8fffdd81234749dc3f6c7bda37821",
+      "dependencies": [
+        {
+          "package": "am2320-driver",
+          "path": "../am2320-driver"
+        }
+      ],
+      "crate": {
+        "package": "am2320-driver",
+        "path": "../am2320-driver"
+      }
+    }
+  }
+}

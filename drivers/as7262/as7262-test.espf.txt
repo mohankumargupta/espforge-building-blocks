@@ -1,0 +1,20 @@
+====================
+AS7262 test firmware
+
+Fixture for drivers/as7262: the project-local `<as7262>` driver over I2C, wired
+to the virtual AS7262 part (SCL = GPIO 6, SDA = GPIO 5, address 0x49). Prints
+`TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="as7262_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <as7262 id="spectrum" bus="$i2c0" address="0x49" />
+
+# services

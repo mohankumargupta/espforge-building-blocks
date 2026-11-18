@@ -1,0 +1,3 @@
+{ "parts": {
+    "light": { "module": "parts/bh1750.wasm", "pins": { "SCL": 6, "SDA": 5 } }
+} }

@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "as7262": {
+      "kind": "local",
+      "source": "./drivers/as7262.kdl",
+      "manifest_sha256": "7b12a576e4be837abe9343dc6d7acc92e140731d01385f92b0c5f729f475c490",
+      "dependencies": [
+        {
+          "package": "as7262-driver",
+          "path": "../as7262-driver"
+        }
+      ],
+      "crate": {
+        "package": "as7262-driver",
+        "path": "../as7262-driver"
+      }
+    }
+  }
+}

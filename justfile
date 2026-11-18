@@ -1524,3 +1524,330 @@ aip31068-sensor: aip31068-image aip31068-part
 # Remove the disposable images; the fixture and the checked-in wasm stay.
 aip31068-clean:
     rm -rf {{ aip31068_out }} {{ aip31068_part_dir }}/target
+
+
+# ---- AM2320 virtual part fixture (drivers/am2320) --------------------------
+
+am2320_rel := "drivers/am2320"
+am2320_dir := justfile_directory() / am2320_rel
+am2320_out := build_dir / "am2320"
+am2320_port := "127.0.0.1:5570"
+am2320_part_dir := am2320_dir / "parts" / "am2320"
+am2320_part_wasm := am2320_dir / "parts" / "am2320.wasm"
+
+# The part's own tests: the registers, the CRC-16 and the inputs, on the host.
+am2320-part-test:
+    cargo test --manifest-path {{ am2320_part_dir }}/Cargo.toml
+
+# Build the virtual AM2320 -> drivers/am2320/parts/am2320.wasm.
+am2320-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ am2320_part_dir }}/Cargo.toml"
+    cp "{{ am2320_part_dir }}/target/wasm32-unknown-unknown/release/am2320.wasm" \
+        "{{ am2320_part_wasm }}"
+    ls -l "{{ am2320_part_wasm }}"
+
+# The driver's own tests: the read command, the decode and the sign, on the
+# host.
+am2320-driver-test:
+    cargo test --manifest-path {{ am2320_dir }}/am2320-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+am2320-check:
+    just check {{ am2320_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+am2320-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ am2320_out }}"
+    just check "{{ am2320_rel }}"
+    just build "{{ am2320_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ am2320_out }}/am2320.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/am2320_test" \
+        "{{ am2320_out }}/am2320.elf"
+    ls -l "{{ am2320_out }}/am2320.bin" "{{ am2320_out }}/am2320.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+am2320-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ am2320_out }}/am2320.bin --cosim-board {{ am2320_dir }}/board.json --control-tcp {{ am2320_port }} --elf {{ am2320_out }}/am2320.elf --timeout {{ timeout }} --log-file {{ am2320_out }}/emu.log"
+
+# One control line, e.g. "part climate input set:temperature=30".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+am2320-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ am2320_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/am2320/drivers/am2320.kdl.
+am2320-driver-record:
+    just espforge "driver {{ am2320_rel }} add --local {{ am2320_rel }}/drivers/am2320.kdl"
+
+# Happy path: boot, 22.50 C / 45.00 %RH, then a warmer and a wetter part.
+am2320-sensor: am2320-image am2320-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ am2320_out }}/sensor.stdout"
+    log="{{ am2320_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just am2320-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: am2320 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x5C on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: climate t=22.50 c rh=45.00 %" "the part reads 22.50 C and 45.00 %RH" 20
+    just am2320-part-input "part climate input set:temperature=30" >/dev/null
+    wait_for "TEST: climate t=30.00 c rh=45.00 %" "set:temperature=30 -> 30.00 C" 20
+    just am2320-part-input "part climate input set:humidity=60" >/dev/null
+    wait_for "TEST: climate t=30.00 c rh=60.00 %" "set:humidity=60 -> 60.00 %RH" 20
+    echo "am2320-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+am2320-clean:
+    rm -rf {{ am2320_out }} {{ am2320_part_dir }}/target
+
+
+# ---- AS7262 virtual part fixture (drivers/as7262) --------------------------
+
+as7262_rel := "drivers/as7262"
+as7262_dir := justfile_directory() / as7262_rel
+as7262_out := build_dir / "as7262"
+as7262_port := "127.0.0.1:5571"
+as7262_part_dir := as7262_dir / "parts" / "as7262"
+as7262_part_wasm := as7262_dir / "parts" / "as7262.wasm"
+
+# The part's own tests: the virtual registers, the latching and the inputs, on
+# the host.
+as7262-part-test:
+    cargo test --manifest-path {{ as7262_part_dir }}/Cargo.toml
+
+# Build the virtual AS7262 -> drivers/as7262/parts/as7262.wasm.
+as7262-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ as7262_part_dir }}/Cargo.toml"
+    cp "{{ as7262_part_dir }}/target/wasm32-unknown-unknown/release/as7262.wasm" \
+        "{{ as7262_part_wasm }}"
+    ls -l "{{ as7262_part_wasm }}"
+
+# The driver's own tests: the reset, the reads and the decode, on the host.
+as7262-driver-test:
+    cargo test --manifest-path {{ as7262_dir }}/as7262-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+as7262-check:
+    just check {{ as7262_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+as7262-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ as7262_out }}"
+    just check "{{ as7262_rel }}"
+    just build "{{ as7262_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ as7262_out }}/as7262.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/as7262_test" \
+        "{{ as7262_out }}/as7262.elf"
+    ls -l "{{ as7262_out }}/as7262.bin" "{{ as7262_out }}/as7262.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+as7262-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ as7262_out }}/as7262.bin --cosim-board {{ as7262_dir }}/board.json --control-tcp {{ as7262_port }} --elf {{ as7262_out }}/as7262.elf --timeout {{ timeout }} --log-file {{ as7262_out }}/emu.log"
+
+# One control line, e.g. "part spectrum input set:red=999".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+as7262-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ as7262_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/as7262/drivers/as7262.kdl.
+as7262-driver-record:
+    just espforge "driver {{ as7262_rel }} add --local {{ as7262_rel }}/drivers/as7262.kdl"
+
+# Happy path: boot, the default spectrum, a red step and a dark part.
+as7262-sensor: as7262-image as7262-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ as7262_out }}/sensor.stdout"
+    log="{{ as7262_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just as7262-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: as7262 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x49 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: as7262 v=1200 b=2400 g=3200 y=3100 o=2800 r=2200" "the default spectrum (1200 2400 3200 3100 2800 2200)" 20
+    just as7262-part-input "part spectrum input set:red=999" >/dev/null
+    wait_for "TEST: as7262 v=1200 b=2400 g=3200 y=3100 o=2800 r=999" "set:red=999 -> the red channel moves" 20
+    just as7262-part-input "part spectrum input dark" >/dev/null
+    wait_for "TEST: as7262 v=0 b=0 g=0 y=0 o=0 r=0" "dark -> all six channels read 0" 20
+    echo "as7262-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+as7262-clean:
+    rm -rf {{ as7262_out }} {{ as7262_part_dir }}/target
+
+
+# ---- BH1750 virtual part fixture (drivers/bh1750) --------------------------
+
+bh1750_rel := "drivers/bh1750"
+bh1750_dir := justfile_directory() / bh1750_rel
+bh1750_out := build_dir / "bh1750"
+bh1750_port := "127.0.0.1:5572"
+bh1750_part_dir := bh1750_dir / "parts" / "bh1750"
+bh1750_part_wasm := bh1750_dir / "parts" / "bh1750.wasm"
+
+# The part's own tests: the commands, the modes and the inputs, on the host.
+bh1750-part-test:
+    cargo test --manifest-path {{ bh1750_part_dir }}/Cargo.toml
+
+# Build the virtual BH1750 -> drivers/bh1750/parts/bh1750.wasm.
+bh1750-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ bh1750_part_dir }}/Cargo.toml"
+    cp "{{ bh1750_part_dir }}/target/wasm32-unknown-unknown/release/bh1750.wasm" \
+        "{{ bh1750_part_wasm }}"
+    ls -l "{{ bh1750_part_wasm }}"
+
+# The driver's own tests: the power-on, the read and the lux conversion, on
+# the host.
+bh1750-driver-test:
+    cargo test --manifest-path {{ bh1750_dir }}/bh1750-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+bh1750-check:
+    just check {{ bh1750_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+bh1750-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ bh1750_out }}"
+    just check "{{ bh1750_rel }}"
+    just build "{{ bh1750_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ bh1750_out }}/bh1750.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/bh1750_test" \
+        "{{ bh1750_out }}/bh1750.elf"
+    ls -l "{{ bh1750_out }}/bh1750.bin" "{{ bh1750_out }}/bh1750.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+bh1750-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ bh1750_out }}/bh1750.bin --cosim-board {{ bh1750_dir }}/board.json --control-tcp {{ bh1750_port }} --elf {{ bh1750_out }}/bh1750.elf --timeout {{ timeout }} --log-file {{ bh1750_out }}/emu.log"
+
+# One control line, e.g. "part light input set:lux=1000".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+bh1750-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ bh1750_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/bh1750/drivers/bh1750.kdl.
+bh1750-driver-record:
+    just espforge "driver {{ bh1750_rel }} add --local {{ bh1750_rel }}/drivers/bh1750.kdl"
+
+# Happy path: boot, the default light, a brighter room and a dark one.
+bh1750-sensor: bh1750-image bh1750-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ bh1750_out }}/sensor.stdout"
+    log="{{ bh1750_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just bh1750-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: bh1750 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x23 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: bh1750 lux=300.0" "the default light (300.0 lux)" 20
+    just bh1750-part-input "part light input set:lux=1000" >/dev/null
+    wait_for "TEST: bh1750 lux=1000.0" "set:lux=1000 -> the reading moves" 20
+    just bh1750-part-input "part light input dark" >/dev/null
+    wait_for "TEST: bh1750 lux=0.0" "dark -> 0.0 lux" 20
+    echo "bh1750-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+bh1750-clean:
+    rm -rf {{ bh1750_out }} {{ bh1750_part_dir }}/target

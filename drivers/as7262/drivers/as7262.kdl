@@ -1,0 +1,34 @@
+// The external `<as7262>` driver: a project-local manifest, not a module in
+// espforge-drivers. `codegen.feature` is absent, so the dependency below is
+// written into the generated project's Cargo.toml instead of selecting an
+// espforge-drivers feature.
+driver "as7262" {
+    format_version 2
+    summary "ams AS7262 6-channel visible light spectral sensor on I2C"
+    description "Reads six visible-light channels from an AS7262 over an I2C bus. Only three physical registers exist (STATUS, WRITE, READ); every other register is virtual and reached through them: write the virtual address with bit 7 set and then the data byte, or write the address with bit 7 clear and read the byte back. The driver soft-resets the part and sets the integration time at construction, then selects 16x gain with a one-shot conversion of both photodiode banks and reads the six big-endian raw channels V, B, G, Y, O and R. The Rust half is the `as7262-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    category "sensor"
+
+    dependency "as7262-driver" {
+        path "../as7262-driver"
+    }
+
+    bus "i2c" {
+        address allowed="0x49..=0x49"
+    }
+
+    codegen {
+        runtime "blocking" {
+            type "as7262_driver::As7262<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
+            constructor "as7262_driver::As7262::new({bus_device}, {address})"
+            endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the sensor during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<as7262 id=\"spectrum\" bus=\"$i2c0\" address=\"0x49\" />"#
+    see_also "peripherals/i2c"
+}

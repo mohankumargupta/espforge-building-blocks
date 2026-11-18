@@ -1,0 +1,20 @@
+====================
+BH1750 test firmware
+
+Fixture for drivers/bh1750: the project-local `<bh1750>` driver over I2C, wired
+to the virtual BH1750 part (SCL = GPIO 6, SDA = GPIO 5, address 0x23). Prints
+`TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="bh1750_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <bh1750 id="light" bus="$i2c0" address="0x23" />
+
+# services

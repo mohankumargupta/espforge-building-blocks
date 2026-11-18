@@ -1,0 +1,20 @@
+====================
+AM2320 test firmware
+
+Fixture for drivers/am2320: the project-local `<am2320>` driver over I2C, wired
+to the virtual AM2320 part (SCL = GPIO 6, SDA = GPIO 5, address 0x5C). Prints
+`TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="am2320_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <am2320 id="climate" bus="$i2c0" address="0x5C" />
+
+# services
