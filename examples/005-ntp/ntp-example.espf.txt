@@ -1,0 +1,37 @@
+====================
+005 - NTP CLIENT: SET THE CLOCK ONCE, THEN READ IT LOCALLY
+
+The espforge `05.Networking/ntp` example on this repository's terms: join
+Wi-Fi, synchronise a wall clock from an SNTPv4 server, then read the time
+without touching the network.
+
+<ntp> is a service over the station's stack, so it names it with
+network="$home" and needs <runtime type="embassy"> like every other network
+client. The protocol, the 48-byte request and the reply checks are `sntpc`'s;
+the runtime supplies a UDP socket over embassy-net plus an embassy-time
+timestamp source, and resolves the server name through the DHCP DNS server.
+
+Why this is not just `get_time()` in a loop: there is no RTC on the board.
+`sync()` anchors the server's Unix time to the monotonic clock, and `now()`
+advances that anchor locally, so the per-tick log costs no DNS lookup or UDP
+exchange. Before the first successful sync `now()` returns an error, which is
+what the log shows when the query fails.
+
+Will it reach the real internet? Under `esp-emu --net user`, yes: outbound UDP
+is NATed through host sockets and DNS is forwarded from the host's
+/etc/resolv.conf, so the host needs working DNS and outbound UDP to port 123.
+====================
+
+# espforge
+  <project name="ntp_example" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />  // match --wifi-ssid / --wifi-password
+  <ntp id="clock" network="$home" />

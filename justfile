@@ -2457,3 +2457,57 @@ https-example-test: https-example-image
         exit 1
     fi
     echo "PASS: associated, leased an address and fetched the public URL over TLS"
+
+
+# ---- examples/005-ntp (one clock sync, then local reads) ------------------
+
+ntp_example_dir := justfile_directory() / "examples" / "005-ntp"
+ntp_example_out := build_dir / "ntp-example"
+
+# Schema, resource graph and the `<ntp>` -> `<wifi_station>` reference.
+ntp-example-check:
+    just check {{ ntp_example_dir }}
+
+# Compile the example as a merged image -> build/ntp-example/ntp-example.bin.
+ntp-example-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ ntp_example_out }}"
+    just check "{{ ntp_example_dir }}"
+    just build "{{ ntp_example_dir }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ ntp_example_out }}/ntp-example.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/ntp_example" \
+        "{{ ntp_example_out }}/ntp-example.elf"
+    ls -l "{{ ntp_example_out }}/ntp-example.bin" "{{ ntp_example_out }}/ntp-example.elf"
+
+# Run it. `--net user` NATs the guest's UDP through host sockets and forwards
+# DNS from the host's /etc/resolv.conf, so the SNTP query reaches the internet.
+ntp-example-run timeout="90s" ssid="MyNetwork" password="MyPassword":
+    just esp-emu "--chip esp32c3 --firmware {{ ntp_example_out }}/ntp-example.bin --net user --wifi-ssid {{ ssid }} --wifi-password {{ password }} --elf {{ ntp_example_out }}/ntp-example.elf --timeout {{ timeout }} --log-file {{ ntp_example_out }}/emu.log"
+
+# Gate: association, a lease, and a successful SNTP sync.
+# Needs the host to have DNS and outbound UDP to port 123.
+ntp-example-test: ntp-example-image
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ ntp_example_out }}/test.stdout"
+    : > "{{ ntp_example_out }}/emu.log"
+    : > "$out"
+    setsid just ntp-example-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    got=0
+    for _ in $(seq 1 90); do
+        grep -qE 'TEST: ntp (ok|failed)' "$out" && { got=1; break; }
+        sleep 1
+    done
+    grep -E 'TEST: (ip |ntp )' "$out" || true
+    (( got )) || { echo "FAIL: no sync result within 90s; see $out" >&2; exit 1; }
+    if ! grep -q 'TEST: ntp ok' "$out"; then
+        echo "FAIL: the SNTP sync did not succeed; see $out and {{ ntp_example_out }}/emu.log" >&2
+        exit 1
+    fi
+    echo "PASS: associated, leased an address and synchronised the clock"
