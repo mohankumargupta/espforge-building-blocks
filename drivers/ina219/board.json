@@ -1,0 +1,3 @@
+{ "parts": {
+    "power": { "module": "parts/ina219.wasm", "pins": { "SCL": 6, "SDA": 5 } }
+} }

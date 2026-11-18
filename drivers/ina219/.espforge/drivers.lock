@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "ina219": {
+      "kind": "local",
+      "source": "./drivers/ina219.kdl",
+      "manifest_sha256": "aedb1688815e14716d2949c2280180f9a9775f5f801102e6e38e12fe9117a661",
+      "dependencies": [
+        {
+          "package": "ina219-driver",
+          "path": "../ina219-driver"
+        }
+      ],
+      "crate": {
+        "package": "ina219-driver",
+        "path": "../ina219-driver"
+      }
+    }
+  }
+}

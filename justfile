@@ -2297,6 +2297,117 @@ hdc302x-clean:
     rm -rf {{ hdc302x_out }} {{ hdc302x_part_dir }}/target
 
 
+# ---- INA219 virtual part fixture (drivers/ina219) ------------------------
+
+ina219_rel := "drivers/ina219"
+ina219_dir := justfile_directory() / ina219_rel
+ina219_out := build_dir / "ina219"
+ina219_port := "127.0.0.1:5577"
+ina219_part_dir := ina219_dir / "parts" / "ina219"
+ina219_part_wasm := ina219_dir / "parts" / "ina219.wasm"
+
+# The part's own tests: the register file, the scale factors and the inputs,
+# on the host.
+ina219-part-test:
+    cargo test --manifest-path {{ ina219_part_dir }}/Cargo.toml
+
+# Build the virtual INA219 -> drivers/ina219/parts/ina219.wasm.
+ina219-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ ina219_part_dir }}/Cargo.toml"
+    cp "{{ ina219_part_dir }}/target/wasm32-unknown-unknown/release/ina219.wasm" \
+        "{{ ina219_part_wasm }}"
+    ls -l "{{ ina219_part_wasm }}"
+
+# The driver's own tests: the configuration, the calibration and the decode,
+# on the host.
+ina219-driver-test:
+    cargo test --manifest-path {{ ina219_dir }}/ina219-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+ina219-check:
+    just check {{ ina219_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+ina219-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ ina219_out }}"
+    just check "{{ ina219_rel }}"
+    just build "{{ ina219_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ ina219_out }}/ina219.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/ina219_test" \
+        "{{ ina219_out }}/ina219.elf"
+    ls -l "{{ ina219_out }}/ina219.bin" "{{ ina219_out }}/ina219.elf"
+
+# Run the firmware with the virtual monitor on the control channel.
+ina219-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ ina219_out }}/ina219.bin --cosim-board {{ ina219_dir }}/board.json --control-tcp {{ ina219_port }} --elf {{ ina219_out }}/ina219.elf --timeout {{ timeout }} --log-file {{ ina219_out }}/emu.log"
+
+# One control line, e.g. "part power input set:current=1".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+ina219-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ ina219_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing
+# drivers/ina219/drivers/ina219.kdl.
+ina219-driver-record:
+    just espforge "driver {{ ina219_rel }} add --local {{ ina219_rel }}/drivers/ina219.kdl"
+
+# Happy path: boot, the default load, a 12 V bus and a heavier load.
+ina219-sensor: ina219-image ina219-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ ina219_out }}/sensor.stdout"
+    log="{{ ina219_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just ina219-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: ina219 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x40 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: ina219 bus=5.00 v shunt=10.00 mv current=100.00 ma power=500.00 mw" "the default load (5.00 V, 100.00 mA)" 20
+    just ina219-part-input "part power input set:voltage=12" >/dev/null
+    wait_for "TEST: ina219 bus=12.00 v shunt=10.00 mv current=100.00 ma power=1200.00 mw" "set:voltage=12 -> 12.00 V" 20
+    just ina219-part-input "part power input set:current=1" >/dev/null
+    wait_for "TEST: ina219 bus=12.00 v shunt=100.00 mv current=1000.00 ma power=12000.00 mw" "set:current=1 -> 1000.00 mA" 20
+    echo "ina219-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+ina219-clean:
+    rm -rf {{ ina219_out }} {{ ina219_part_dir }}/target
+
+
 # ---- examples/001-wifi-basic (networking basics) -------------------------
 
 wifi_basic_dir := justfile_directory() / "examples" / "001-wifi-basic"
