@@ -1298,3 +1298,112 @@ ads1x15-sensor: ads1x15-image ads1x15-part
 # Remove the disposable images; the fixture and the checked-in wasm stay.
 ads1x15-clean:
     rm -rf {{ ads1x15_out }} {{ ads1x15_part_dir }}/target
+
+
+# ---- AHT20 virtual part fixture (drivers/aht20) ---------------------------
+
+aht20_rel := "drivers/aht20"
+aht20_dir := justfile_directory() / aht20_rel
+aht20_out := build_dir / "aht20"
+aht20_port := "127.0.0.1:5568"
+aht20_part_dir := aht20_dir / "parts" / "aht20"
+aht20_part_wasm := aht20_dir / "parts" / "aht20.wasm"
+
+# The part's own tests: the status, the counts, the CRC and the inputs, on the
+# host.
+aht20-part-test:
+    cargo test --manifest-path {{ aht20_part_dir }}/Cargo.toml
+
+# Build the virtual AHT20 -> drivers/aht20/parts/aht20.wasm.
+aht20-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ aht20_part_dir }}/Cargo.toml"
+    cp "{{ aht20_part_dir }}/target/wasm32-unknown-unknown/release/aht20.wasm" \
+        "{{ aht20_part_wasm }}"
+    ls -l "{{ aht20_part_wasm }}"
+
+# The driver's own tests: the status check and the decode, on the host.
+aht20-driver-test:
+    cargo test --manifest-path {{ aht20_dir }}/aht20-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+aht20-check:
+    just check {{ aht20_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+aht20-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ aht20_out }}"
+    just check "{{ aht20_rel }}"
+    just build "{{ aht20_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ aht20_out }}/aht20.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/aht20_test" \
+        "{{ aht20_out }}/aht20.elf"
+    ls -l "{{ aht20_out }}/aht20.bin" "{{ aht20_out }}/aht20.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+aht20-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ aht20_out }}/aht20.bin --cosim-board {{ aht20_dir }}/board.json --control-tcp {{ aht20_port }} --elf {{ aht20_out }}/aht20.elf --timeout {{ timeout }} --log-file {{ aht20_out }}/emu.log"
+
+# One control line, e.g. "part climate input set:temperature=30".
+aht20-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ aht20_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing
+# drivers/aht20/drivers/aht20.kdl.
+aht20-driver-record:
+    just espforge "driver {{ aht20_rel }} add --local {{ aht20_rel }}/drivers/aht20.kdl"
+
+# Happy path: boot, the default room, then a warmer and a wetter room.
+aht20-sensor: aht20-image aht20-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ aht20_out }}/sensor.stdout"
+    log="{{ aht20_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just aht20-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: aht20 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x38 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: climate t=22.50 c rh=45.00 %" "the part reads 22.50 C and 45.00 %RH" 20
+    just aht20-part-input "part climate input set:temperature=30" >/dev/null
+    wait_for "TEST: climate t=30.00 c rh=45.00 %" "set:temperature=30 -> 30.00 C" 20
+    just aht20-part-input "part climate input set:humidity=60" >/dev/null
+    wait_for "TEST: climate t=30.00 c rh=60.00 %" "set:humidity=60 -> 60.00 %RH" 20
+    echo "aht20-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+aht20-clean:
+    rm -rf {{ aht20_out }} {{ aht20_part_dir }}/target

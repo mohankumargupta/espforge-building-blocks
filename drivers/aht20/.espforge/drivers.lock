@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "aht20": {
+      "kind": "local",
+      "source": "./drivers/aht20.kdl",
+      "manifest_sha256": "81ae3f0dcde051ce8d814f90953c8083ffcde4375266225a6502048b622ece70",
+      "dependencies": [
+        {
+          "package": "aht20-driver",
+          "path": "../aht20-driver"
+        }
+      ],
+      "crate": {
+        "package": "aht20-driver",
+        "path": "../aht20-driver"
+      }
+    }
+  }
+}

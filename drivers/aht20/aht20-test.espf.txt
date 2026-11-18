@@ -1,0 +1,20 @@
+====================
+AHT20 test firmware
+
+Fixture for drivers/aht20: the project-local `<aht20>` driver over I2C, wired
+to the virtual AHT20 part (SCL = GPIO 6, SDA = GPIO 5, address 0x38). Prints
+`TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="aht20_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <aht20 id="climate" bus="$i2c0" address="0x38" />
+
+# services
