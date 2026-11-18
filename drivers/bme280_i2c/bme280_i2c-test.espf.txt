@@ -1,0 +1,20 @@
+====================
+BME280 I2C test firmware
+
+Fixture for drivers/bme280_i2c: the project-local `<bme280_i2c>` driver over
+I2C, wired to the virtual BME280 part (SCL = GPIO 6, SDA = GPIO 5, SDO low =
+0x76). Prints `TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="bme280_i2c_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <bme280_i2c id="climate" bus="$i2c0" address="0x76" />
+
+# services

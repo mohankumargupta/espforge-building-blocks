@@ -1074,3 +1074,116 @@ mpu9250-sensor: mpu9250-image mpu9250-part
 # Remove the disposable images; the fixture and the checked-in wasm stay.
 mpu9250-clean:
     rm -rf {{ mpu9250_out }} {{ mpu9250_part_dir }}/target
+
+
+# ---- BME280 I2C virtual part fixture (drivers/bme280_i2c) ----------------
+
+bme280_i2c_rel := "drivers/bme280_i2c"
+bme280_i2c_dir := justfile_directory() / bme280_i2c_rel
+bme280_i2c_out := build_dir / "bme280_i2c"
+bme280_i2c_port := "127.0.0.1:5566"
+bme280_i2c_part_dir := bme280_i2c_dir / "parts" / "bme280_i2c"
+bme280_i2c_part_wasm := bme280_i2c_dir / "parts" / "bme280_i2c.wasm"
+
+# The part's own tests: ID, the register file, the data bytes and the inputs,
+# on the host.
+bme280-i2c-part-test:
+    cargo test --manifest-path {{ bme280_i2c_part_dir }}/Cargo.toml
+
+# Build the virtual BME280 -> drivers/bme280_i2c/parts/bme280_i2c.wasm.
+bme280-i2c-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ bme280_i2c_part_dir }}/Cargo.toml"
+    cp "{{ bme280_i2c_part_dir }}/target/wasm32-unknown-unknown/release/bme280_i2c.wasm" \
+        "{{ bme280_i2c_part_wasm }}"
+    ls -l "{{ bme280_i2c_part_wasm }}"
+
+# The driver's own tests: the ID check, the configuration writes and the
+# compensation, on the host.
+bme280-i2c-driver-test:
+    cargo test --manifest-path {{ bme280_i2c_dir }}/bme280-i2c-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+bme280-i2c-check:
+    just check {{ bme280_i2c_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+bme280-i2c-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ bme280_i2c_out }}"
+    just check "{{ bme280_i2c_rel }}"
+    just build "{{ bme280_i2c_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ bme280_i2c_out }}/bme280_i2c.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/bme280_i2c_test" \
+        "{{ bme280_i2c_out }}/bme280_i2c.elf"
+    ls -l "{{ bme280_i2c_out }}/bme280_i2c.bin" "{{ bme280_i2c_out }}/bme280_i2c.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+bme280-i2c-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ bme280_i2c_out }}/bme280_i2c.bin --cosim-board {{ bme280_i2c_dir }}/board.json --control-tcp {{ bme280_i2c_port }} --elf {{ bme280_i2c_out }}/bme280_i2c.elf --timeout {{ timeout }} --log-file {{ bme280_i2c_out }}/emu.log"
+
+# One control line, e.g. "part climate input warmer".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+bme280-i2c-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ bme280_i2c_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing
+# drivers/bme280_i2c/drivers/bme280_i2c.kdl.
+bme280-i2c-driver-record:
+    just espforge "driver {{ bme280_i2c_rel }} add --local {{ bme280_i2c_rel }}/drivers/bme280_i2c.kdl"
+
+# Happy path: boot, room conditions, warmer, a pressure step, a humidity step.
+bme280-i2c-sensor: bme280-i2c-image bme280-i2c-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ bme280_i2c_out }}/sensor.stdout"
+    log="{{ bme280_i2c_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just bme280-i2c-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: bme280_i2c boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x76 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: climate t=22.50 c p=1013.25 hpa rh=45.00 %" "room conditions" 20
+    just bme280-i2c-part-input "part climate input warmer" >/dev/null
+    wait_for "TEST: climate t=23.50 c p=1013.25 hpa rh=45.00 %" "warmer -> 23.50 C" 20
+    just bme280-i2c-part-input "part climate input set:pressure=1000" >/dev/null
+    wait_for "TEST: climate t=23.50 c p=1000.00 hpa rh=45.00 %" "set:pressure=1000 -> 1000.00 hPa" 20
+    just bme280-i2c-part-input "part climate input set:humidity=62" >/dev/null
+    wait_for "TEST: climate t=23.50 c p=1000.00 hpa rh=62.00 %" "set:humidity=62 -> 62.00 %RH" 20
+    echo "bme280-i2c-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+bme280-i2c-clean:
+    rm -rf {{ bme280_i2c_out }} {{ bme280_i2c_part_dir }}/target

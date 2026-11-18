@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "bme280_i2c": {
+      "kind": "local",
+      "source": "./drivers/bme280_i2c.kdl",
+      "manifest_sha256": "ae0187613dd40c7648b4b3e2aaba7d288ee4e53106f1185c023a4479e0db82ad",
+      "dependencies": [
+        {
+          "package": "bme280-i2c-driver",
+          "path": "../bme280-i2c-driver"
+        }
+      ],
+      "crate": {
+        "package": "bme280-i2c-driver",
+        "path": "../bme280-i2c-driver"
+      }
+    }
+  }
+}
