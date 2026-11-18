@@ -1,8 +1,10 @@
 ====================
 007 - I2C BME280
 
-<bme280> is proposed; the bus and the multi-value shape are implemented. The
-buildable version of this block uses <scd4x> instead (see README.md).
+One bus, one part, several readings: `<bme280_i2c>` is a project-local driver
+(see drivers/bme280_i2c.kdl), the same shape ESPHome's `sensor: platform:
+bme280` gives with per-metric children. The driver crate beside this file is a
+copy of drivers/bme280_i2c's, so this block builds on its own.
 ====================
 
 # espforge
@@ -14,6 +16,6 @@ buildable version of this block uses <scd4x> instead (see README.md).
   <i2c id="i2c0" sda="4" scl="5" frequency="100kHz" />
 
 # devices
-  <bme280 id="climate" bus="$i2c0" address="0x76" />
+  <bme280_i2c id="climate" bus="$i2c0" address="0x76" />
 
 # services

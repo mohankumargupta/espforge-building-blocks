@@ -1,7 +1,6 @@
 # 007 — I²C Bus & Multi-Value Sensors
 
-**Status:** 🟡 partly possible — I²C and a multi-value driver (`<scd4x>`) work
-today; `<bme280>` does not exist
+**Status:** ✅ possible today — I²C plus the project-local `<bme280_i2c>` driver
 **ESPHome lego:** `i2c:` + `sensor: platform: bme280` with per-metric children
 
 ## ESPHome
@@ -33,7 +32,7 @@ temperature and a humidity reading with independent names.
 |---|---|
 | `i2c.sda/scl` | `<i2c id="i2c0" sda="4" scl="5" />` (declare `frequency` for a faster bus) |
 | `i2c.scan: true` | none: bus scanning is an example (`i2c_scanner`), not a bus attribute |
-| `sensor: platform: bme280, address` | proposed `<bme280 id="climate" bus="$i2c0" address="0x76" />` |
+| `sensor: platform: bme280, address` | `<bme280_i2c id="climate" bus="$i2c0" address="0x76" />` |
 | `temperature.name` / `humidity.name` | one device handle returning both values; `name`s do not exist |
 | `update_interval` | a `delay_ms(60_000)` in `forever` |
 
@@ -41,22 +40,32 @@ temperature and a humidity reading with independent names.
 multi-value driver fits espforge well: one element, one bus claim, one device
 field, several readings.
 
-### Working substitute today
+### The driver
 
-The bundled SCD4x driver is the same lego block (an I²C part with several
-readings, with an address fixed by the part):
+There is no bundled `<bme280>` element. The driver is project-local, exactly
+the shape `drivers/bme280_i2c` uses:
 
-```xml
-<i2c id="i2c0" sda="4" scl="5" frequency="100kHz" />
-<scd4x id="climate" bus="$i2c0" address="0x62" />
+- `drivers/bme280_i2c.kdl` — the manifest: an I²C device at `0x76..=0x77`,
+  constructed as `bme280_i2c_driver::Bme280I2c::new(...)`, with no
+  `codegen.feature`.
+- `bme280-i2c-driver/` — the Rust half, a copy of the crate in
+  `drivers/bme280_i2c/`. It is copied rather than referenced because espforge
+  refuses a `dependency ... path` that escapes the project directory.
+
+`Cargo.extra.toml` carries the I²C overlay described in
+`i2c-drivers-workaround.md`: without it every transaction fails
+`AcknowledgeCheckFailed(Data)` under `esp-emu`, and the constructor never
+returns.
+
+```sh
+just check blocks/007-i2c-bme280    # schema, driver discovery, lock
+just build blocks/007-i2c-bme280    # generate and compile
 ```
 
-```rust
-let climate = device!(ctx, climate);
-climate.start()?;
-let reading = climate.read()?;   // co2_ppm, temperature_centi_c, humidity_centi_percent
-```
+The first `check` writes `.espforge/drivers.lock`. Editing the manifest after
+that is `DRIVER_LOCK_STALE`; re-record it with
+`just espforge "driver blocks/007-i2c-bme280 add --local blocks/007-i2c-bme280/drivers/bme280_i2c.kdl"`.
+Editing the crate, `src/app.rs` or the `.espf.txt` needs no re-record.
 
-The gap is the part, not the architecture: `<bme280>` needs a driver manifest
-plus a Rust driver returning `temperature_c` / `humidity_percent`, and the
-multi-value shape is already proven by SCD4x.
+For the part on a virtual board, `drivers/bme280_i2c` is the full fixture: the
+same driver against `parts/bme280_i2c.wasm`, with `just bme280-i2c-sensor`.
