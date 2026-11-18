@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "ads1x15": {
+      "kind": "local",
+      "source": "./drivers/ads1x15.kdl",
+      "manifest_sha256": "4e01938afcf14614ee49a4c406cebb010899e94ea88e3eda440b692c768a4872",
+      "dependencies": [
+        {
+          "package": "ads1x15-driver",
+          "path": "../ads1x15-driver"
+        }
+      ],
+      "crate": {
+        "package": "ads1x15-driver",
+        "path": "../ads1x15-driver"
+      }
+    }
+  }
+}

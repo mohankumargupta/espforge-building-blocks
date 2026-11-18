@@ -1187,3 +1187,114 @@ bme280-i2c-sensor: bme280-i2c-image bme280-i2c-part
 # Remove the disposable images; the fixture and the checked-in wasm stay.
 bme280-i2c-clean:
     rm -rf {{ bme280_i2c_out }} {{ bme280_i2c_part_dir }}/target
+
+
+# ---- ADS1x15 virtual part fixture (drivers/ads1x15) -----------------------
+
+ads1x15_rel := "drivers/ads1x15"
+ads1x15_dir := justfile_directory() / ads1x15_rel
+ads1x15_out := build_dir / "ads1x15"
+ads1x15_port := "127.0.0.1:5567"
+ads1x15_part_dir := ads1x15_dir / "parts" / "ads1x15"
+ads1x15_part_wasm := ads1x15_dir / "parts" / "ads1x15.wasm"
+
+# The part's own tests: the register file, the conversions, the gain and the
+# inputs, on the host.
+ads1x15-part-test:
+    cargo test --manifest-path {{ ads1x15_part_dir }}/Cargo.toml
+
+# Build the virtual ADS1115 -> drivers/ads1x15/parts/ads1x15.wasm.
+ads1x15-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ ads1x15_part_dir }}/Cargo.toml"
+    cp "{{ ads1x15_part_dir }}/target/wasm32-unknown-unknown/release/ads1x15.wasm" \
+        "{{ ads1x15_part_wasm }}"
+    ls -l "{{ ads1x15_part_wasm }}"
+
+# The driver's own tests: the configuration write and the decode, on the host.
+ads1x15-driver-test:
+    cargo test --manifest-path {{ ads1x15_dir }}/ads1x15-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+ads1x15-check:
+    just check {{ ads1x15_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+ads1x15-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ ads1x15_out }}"
+    just check "{{ ads1x15_rel }}"
+    just build "{{ ads1x15_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ ads1x15_out }}/ads1x15.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/ads1x15_test" \
+        "{{ ads1x15_out }}/ads1x15.elf"
+    ls -l "{{ ads1x15_out }}/ads1x15.bin" "{{ ads1x15_out }}/ads1x15.elf"
+
+# Run the firmware with the virtual ADC on the control channel.
+ads1x15-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ ads1x15_out }}/ads1x15.bin --cosim-board {{ ads1x15_dir }}/board.json --control-tcp {{ ads1x15_port }} --elf {{ ads1x15_out }}/ads1x15.elf --timeout {{ timeout }} --log-file {{ ads1x15_out }}/emu.log"
+
+# One control line, e.g. "part adc input set:ain0=1.25".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+ads1x15-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ ads1x15_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing
+# drivers/ads1x15/drivers/ads1x15.kdl.
+ads1x15-driver-record:
+    just espforge "driver {{ ads1x15_rel }} add --local {{ ads1x15_rel }}/drivers/ads1x15.kdl"
+
+# Happy path: boot, the four channels, a differential pair, two set inputs.
+ads1x15-sensor: ads1x15-image ads1x15-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ ads1x15_out }}/sensor.stdout"
+    log="{{ ads1x15_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just ads1x15-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: ads1x15 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x48 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: adc a0=0.512 a1=1.024 a2=1.500 a3=0.128 v" "the four channels at their defaults" 20
+    wait_for "TEST: adc a0-a1=-0.512 v" "AIN0 - AIN1 reads -0.512 V" 20
+    just ads1x15-part-input "part adc input set:ain2=1" >/dev/null
+    wait_for "TEST: adc a0=0.512 a1=1.024 a2=1.000 a3=0.128 v" "set:ain2=1 -> 1.000 V" 20
+    just ads1x15-part-input "part adc input set:ain0=1.25" >/dev/null
+    wait_for "TEST: adc a0=1.250 a1=1.024 a2=1.000 a3=0.128 v" "set:ain0=1.25 -> 1.250 V" 20
+    echo "ads1x15-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+ads1x15-clean:
+    rm -rf {{ ads1x15_out }} {{ ads1x15_part_dir }}/target
