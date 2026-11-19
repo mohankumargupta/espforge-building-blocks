@@ -1,0 +1,49 @@
+====================
+WEBSOCKETS: ONE TEXT FRAME OVER ws:// AND ONE OVER wss://
+
+The espforge `05.Networking/ws_client` and `05.Networking/wss_client`
+examples on this repository's terms: join Wi-Fi, then open a WebSocket session
+with each variant, echo one text message, and close it. Both are the same
+macro-shape, so the board carries one of each:
+
+  <ws_client>   plain RFC 6455 over TCP, framed by edge-ws
+  <wss_client>  the same framing over a TLS 1.3 stream (embedded-tls)
+
+`<wss_client>` needs `insecure="true"` for now: certificate verification is not
+implemented in the runtime (it would need a trust store and embedded-tls's
+rustpki/webpki features), so the handshake runs unverified and the compiler
+prints a warning saying so. Keep the flag: it records that the example is a
+test of the encrypted path, not of the server's identity.
+
+Both services resolve their hostname through the station's DHCP DNS server and
+open the TCP connection on its stack, which is why they name it with
+`network="$home"`. Under `esp-emu --net user` outbound TCP is NATed through
+host sockets and DNS is forwarded from the host's /etc/resolv.conf, so the host
+needs working DNS and outbound TCP to ports 80 and 443.
+
+Buffers: a ws session needs at least 2048 bytes for its two socket buffers; a
+wss session additionally takes two TLS record buffers (4096 read, 2048 write),
+so 8192 bytes. Both are the caller's arrays in src/app.rs and live as long as
+the session does — nothing is allocated on the heap for them.
+
+The two endpoints in src/app.rs are different hosts on purpose: the plain-ws
+echo answers on port 80, while the wss echo-host candidate that answers port 80
+with a 301 redirect cannot be upgraded. A TLS host that aborts embedded-tls's
+handshake (fatal `handshake_failure`) cannot be used either; see the comments
+on the two constants.
+====================
+
+# espforge
+  <project name="websockets" />
+  <chip type="esp32c3" />
+  <runtime type="embassy" />
+
+# peripherals
+  <wifi id="radio" />
+
+# devices
+
+# services
+  <wifi_station id="home" wifi="$radio" ssid="MyNetwork" password="MyPassword" />  // match --wifi-ssid / --wifi-password
+  <ws_client id="ws" network="$home" />
+  <wss_client id="secure_ws" network="$home" insecure="true" />

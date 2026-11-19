@@ -1,0 +1,20 @@
+====================
+MCP9808 test firmware
+
+Fixture for drivers/mcp9808: the project-local `<mcp9808>` driver over I2C,
+wired to the virtual MCP9808 part (SCL = GPIO 6, SDA = GPIO 5, address 0x18).
+Prints `TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="mcp9808_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <mcp9808 id="temperature" bus="$i2c0" address="0x18" />
+
+# services

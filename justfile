@@ -2408,6 +2408,117 @@ ina219-clean:
     rm -rf {{ ina219_out }} {{ ina219_part_dir }}/target
 
 
+# ---- MCP9808 virtual part fixture (drivers/mcp9808) ----------------------
+
+mcp9808_rel := "drivers/mcp9808"
+mcp9808_dir := justfile_directory() / mcp9808_rel
+mcp9808_out := build_dir / "mcp9808"
+mcp9808_port := "127.0.0.1:5578"
+mcp9808_part_dir := mcp9808_dir / "parts" / "mcp9808"
+mcp9808_part_wasm := mcp9808_dir / "parts" / "mcp9808.wasm"
+
+# The part's own tests: the register file, the encoding and the inputs, on the
+# host.
+mcp9808-part-test:
+    cargo test --manifest-path {{ mcp9808_part_dir }}/Cargo.toml
+
+# Build the virtual MCP9808 -> drivers/mcp9808/parts/mcp9808.wasm.
+mcp9808-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ mcp9808_part_dir }}/Cargo.toml"
+    cp "{{ mcp9808_part_dir }}/target/wasm32-unknown-unknown/release/mcp9808.wasm" \
+        "{{ mcp9808_part_wasm }}"
+    ls -l "{{ mcp9808_part_wasm }}"
+
+# The driver's own tests: the identification, the resolution and the decode,
+# on the host.
+mcp9808-driver-test:
+    cargo test --manifest-path {{ mcp9808_dir }}/mcp9808-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+mcp9808-check:
+    just check {{ mcp9808_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+mcp9808-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ mcp9808_out }}"
+    just check "{{ mcp9808_rel }}"
+    just build "{{ mcp9808_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ mcp9808_out }}/mcp9808.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/mcp9808_test" \
+        "{{ mcp9808_out }}/mcp9808.elf"
+    ls -l "{{ mcp9808_out }}/mcp9808.bin" "{{ mcp9808_out }}/mcp9808.elf"
+
+# Run the firmware with the virtual monitor on the control channel.
+mcp9808-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ mcp9808_out }}/mcp9808.bin --cosim-board {{ mcp9808_dir }}/board.json --control-tcp {{ mcp9808_port }} --elf {{ mcp9808_out }}/mcp9808.elf --timeout {{ timeout }} --log-file {{ mcp9808_out }}/emu.log"
+
+# One control line, e.g. "part temperature input set:temperature=30".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+mcp9808-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ mcp9808_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing
+# drivers/mcp9808/drivers/mcp9808.kdl.
+mcp9808-driver-record:
+    just espforge "driver {{ mcp9808_rel }} add --local {{ mcp9808_rel }}/drivers/mcp9808.kdl"
+
+# Happy path: boot, room temperature, then a warm and a cold reading.
+mcp9808-sensor: mcp9808-image mcp9808-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ mcp9808_out }}/sensor.stdout"
+    log="{{ mcp9808_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just mcp9808-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: mcp9808 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x18 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: mcp9808 temp=24.00 c" "the default 24.00 °C" 20
+    just mcp9808-part-input "part temperature input set:temperature=30" >/dev/null
+    wait_for "TEST: mcp9808 temp=30.00 c" "set:temperature=30 -> 30.00 °C" 20
+    just mcp9808-part-input "part temperature input set:temperature=-5.5" >/dev/null
+    wait_for "TEST: mcp9808 temp=-5.50 c" "set:temperature=-5.5 -> -5.50 °C" 20
+    echo "mcp9808-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+mcp9808-clean:
+    rm -rf {{ mcp9808_out }} {{ mcp9808_part_dir }}/target
+
+
 # ---- examples/001-wifi-basic (networking basics) -------------------------
 
 wifi_basic_dir := justfile_directory() / "examples" / "001-wifi-basic"
@@ -2622,3 +2733,58 @@ ntp-example-test: ntp-example-image
         exit 1
     fi
     echo "PASS: associated, leased an address and synchronised the clock"
+
+
+# ---- examples/websockets (one echo over ws:// and one over wss://) -------
+
+websockets_dir := justfile_directory() / "examples" / "websockets"
+websockets_out := build_dir / "websockets"
+
+# Schema, resource graph and the two `network="$home"` references.
+websockets-check:
+    just check {{ websockets_dir }}
+
+# Compile the example as a merged image -> build/websockets/websockets.bin.
+websockets-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ websockets_out }}"
+    just check "{{ websockets_dir }}"
+    just build "{{ websockets_dir }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ websockets_out }}/websockets.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/websockets" \
+        "{{ websockets_out }}/websockets.elf"
+    ls -l "{{ websockets_out }}/websockets.bin" "{{ websockets_out }}/websockets.elf"
+
+# Run it. `--net user` NATs the guest's TCP through host sockets and forwards
+# DNS from the host's /etc/resolv.conf, so both echo servers are reachable.
+websockets-run timeout="120s" ssid="MyNetwork" password="MyPassword":
+    just esp-emu "--chip esp32c3 --firmware {{ websockets_out }}/websockets.bin --net user --wifi-ssid {{ ssid }} --wifi-password {{ password }} --elf {{ websockets_out }}/websockets.elf --timeout {{ timeout }} --log-file {{ websockets_out }}/emu.log"
+
+# Gate: association, a lease, and one echo over each transport.
+# Needs the host to have DNS and outbound TCP to 80 and 443.
+websockets-test: websockets-image
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ websockets_out }}/test.stdout"
+    : > "{{ websockets_out }}/emu.log"
+    : > "$out"
+    setsid just websockets-run 120s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 120); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out and {{ websockets_out }}/emu.log" >&2
+        return 1
+    }
+    wait_for 'TEST: ws ok' 'plain ws:// echoed the text frame' || exit 1
+    wait_for 'TEST: wss ok' 'secure wss:// echoed the text frame' || exit 1
+    grep -E 'TEST: (ip |ws |wss |websockets )' "$out"
+    echo "PASS: both WebSocket variants echoed a text frame"

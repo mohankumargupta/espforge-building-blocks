@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "mcp9808": {
+      "kind": "local",
+      "source": "./drivers/mcp9808.kdl",
+      "manifest_sha256": "f6d4b5cc464d7a17d63cf5f86c0ae166bb98e5be7b42b42335222f6add32ccc5",
+      "dependencies": [
+        {
+          "package": "mcp9808-driver",
+          "path": "../mcp9808-driver"
+        }
+      ],
+      "crate": {
+        "package": "mcp9808-driver",
+        "path": "../mcp9808-driver"
+      }
+    }
+  }
+}
