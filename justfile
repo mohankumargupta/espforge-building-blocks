@@ -3068,6 +3068,118 @@ tca95xx-clean:
     rm -rf {{ tca95xx_out }} {{ tca95xx_part_dir }}/target
 
 
+# ---- TLV493D virtual part fixture (drivers/tlv493d) ----------------------
+
+tlv493d_rel := "drivers/tlv493d"
+tlv493d_dir := justfile_directory() / tlv493d_rel
+tlv493d_out := build_dir / "tlv493d"
+tlv493d_port := "127.0.0.1:5587"
+tlv493d_part_dir := tlv493d_dir / "parts" / "tlv493d"
+tlv493d_part_wasm := tlv493d_dir / "parts" / "tlv493d.wasm"
+
+# The part's own tests: the frame, the factory bytes and the inputs, on the
+# host.
+tlv493d-part-test:
+    cargo test --manifest-path {{ tlv493d_part_dir }}/Cargo.toml
+
+# Build the virtual TLV493D -> drivers/tlv493d/parts/tlv493d.wasm.
+tlv493d-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ tlv493d_part_dir }}/Cargo.toml"
+    cp "{{ tlv493d_part_dir }}/target/wasm32-unknown-unknown/release/tlv493d.wasm" \
+        "{{ tlv493d_part_wasm }}"
+    ls -l "{{ tlv493d_part_wasm }}"
+
+# The driver's own tests: the frame layout, the scale and the decode, on the
+# host.
+tlv493d-driver-test:
+    cargo test --manifest-path {{ tlv493d_dir }}/tlv493d-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+tlv493d-check:
+    just check {{ tlv493d_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+tlv493d-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ tlv493d_out }}"
+    just check "{{ tlv493d_rel }}"
+    just build "{{ tlv493d_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ tlv493d_out }}/tlv493d.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/tlv493d_test" \
+        "{{ tlv493d_out }}/tlv493d.elf"
+    ls -l "{{ tlv493d_out }}/tlv493d.bin" "{{ tlv493d_out }}/tlv493d.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+tlv493d-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ tlv493d_out }}/tlv493d.bin --cosim-board {{ tlv493d_dir }}/board.json --control-tcp {{ tlv493d_port }} --elf {{ tlv493d_out }}/tlv493d.elf --timeout {{ timeout }} --log-file {{ tlv493d_out }}/emu.log"
+
+# One control line, e.g. "part field input set:bx=0.98".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+tlv493d-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ tlv493d_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/tlv493d/drivers/tlv493d.kdl.
+tlv493d-driver-record:
+    just espforge "driver {{ tlv493d_rel }} add --local {{ tlv493d_rel }}/drivers/tlv493d.kdl"
+
+# Happy path: boot, the field of a fresh part, then two moves and a warmer part.
+tlv493d-sensor: tlv493d-image tlv493d-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ tlv493d_out }}/sensor.stdout"
+    log="{{ tlv493d_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just tlv493d-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: tlv493d boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x5E on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: tlv493d bx=0.00 by=0.00 bz=0.00 mt t=25.00 c" "a fresh part reads no field at 25.00 C" 20
+    just tlv493d-part-input "part field input set:bx=0.98" >/dev/null
+    wait_for "TEST: tlv493d bx=0.98 by=0.00 bz=0.00 mt t=25.00 c" "set:bx=0.98 -> 0.98 mT" 20
+    just tlv493d-part-input "part field input set:bz=-0.49" >/dev/null
+    wait_for "TEST: tlv493d bx=0.98 by=0.00 bz=-0.49 mt t=25.00 c" "set:bz=-0.49 -> -0.49 mT" 20
+    just tlv493d-part-input "part field input set:temperature=26.1" >/dev/null
+    wait_for "TEST: tlv493d bx=0.98 by=0.00 bz=-0.49 mt t=26.10 c" "set:temperature=26.1 -> 26.10 C" 20
+    echo "tlv493d-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+tlv493d-clean:
+    rm -rf {{ tlv493d_out }} {{ tlv493d_part_dir }}/target
+
+
 # ---- examples/001-wifi-basic (networking basics) -------------------------
 
 wifi_basic_dir := justfile_directory() / "examples" / "001-wifi-basic"

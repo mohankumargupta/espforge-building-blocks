@@ -1,0 +1,21 @@
+====================
+TLV493D test firmware
+
+Fixture for drivers/tlv493d: the project-local `<tlv493d>` driver over I2C,
+wired to the virtual TLV493D-A1B6 part (SCL = GPIO 6, SDA = GPIO 5, address
+0x5E).
+Prints `TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="tlv493d_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <tlv493d id="field" bus="$i2c0" address="0x5E" />
+
+# services
