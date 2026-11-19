@@ -1,0 +1,20 @@
+====================
+SCD4x test firmware
+
+Fixture for drivers/scd4x: the project-local `<scd4x>` driver over I2C, wired
+to the virtual SCD4x part (SCL = GPIO 6, SDA = GPIO 5, address 0x62).
+Prints `TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="scd4x_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <scd4x id="co2" bus="$i2c0" address="0x62" />
+
+# services

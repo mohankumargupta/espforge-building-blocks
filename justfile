@@ -2519,6 +2519,329 @@ mcp9808-clean:
     rm -rf {{ mcp9808_out }} {{ mcp9808_part_dir }}/target
 
 
+# ---- SCD4x virtual part fixture (drivers/scd4x) --------------------------
+
+scd4x_rel := "drivers/scd4x"
+scd4x_dir := justfile_directory() / scd4x_rel
+scd4x_out := build_dir / "scd4x"
+scd4x_port := "127.0.0.1:5581"
+scd4x_part_dir := scd4x_dir / "parts" / "scd4x"
+scd4x_part_wasm := scd4x_dir / "parts" / "scd4x.wasm"
+
+# The part's own tests: the encoding, the CRC and the inputs, on the host.
+scd4x-part-test:
+    cargo test --manifest-path {{ scd4x_part_dir }}/Cargo.toml
+
+# Build the virtual SCD4x -> drivers/scd4x/parts/scd4x.wasm.
+scd4x-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ scd4x_part_dir }}/Cargo.toml"
+    cp "{{ scd4x_part_dir }}/target/wasm32-unknown-unknown/release/scd4x.wasm" \
+        "{{ scd4x_part_wasm }}"
+    ls -l "{{ scd4x_part_wasm }}"
+
+# Schema and resource graph for the bundled `<scd4x>` element.
+scd4x-check:
+    just check {{ scd4x_rel }}
+
+# Compile the generated project with the bundled driver.
+scd4x-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ scd4x_out }}"
+    just check "{{ scd4x_rel }}"
+    just build "{{ scd4x_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ scd4x_out }}/scd4x.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/scd4x_test" \
+        "{{ scd4x_out }}/scd4x.elf"
+    ls -l "{{ scd4x_out }}/scd4x.bin" "{{ scd4x_out }}/scd4x.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+scd4x-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ scd4x_out }}/scd4x.bin --cosim-board {{ scd4x_dir }}/board.json --control-tcp {{ scd4x_port }} --elf {{ scd4x_out }}/scd4x.elf --timeout {{ timeout }} --log-file {{ scd4x_out }}/emu.log"
+
+# One control line, e.g. "part co2 input set:co2=1000".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+scd4x-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ scd4x_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Happy path: boot, fresh air, more CO2, then a warmer and wetter room.
+scd4x-sensor: scd4x-image scd4x-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ scd4x_out }}/sensor.stdout"
+    log="{{ scd4x_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just scd4x-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: scd4x boot" "firmware boots" 40
+    wait_for "TEST: scd4x started" "the bundled driver starts periodic measurement" 10
+    wait_for_log "answers I2C 0x62 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: scd4x co2=400 ppm t=22.49 c rh=44.99" "the default 400 ppm at 22.49 C / 44.99 %RH" 20
+    just scd4x-part-input "part co2 input set:co2=1000" >/dev/null
+    wait_for "TEST: scd4x co2=1000 ppm t=22.49 c rh=44.99" "set:co2=1000 -> 1000 ppm" 20
+    just scd4x-part-input "part co2 input set:temperature=30" >/dev/null
+    just scd4x-part-input "part co2 input set:humidity=60" >/dev/null
+    wait_for "TEST: scd4x co2=1000 ppm t=30.00 c rh=60.00" "set temperature and humidity -> 30.00 C / 60.00 %RH" 20
+    echo "scd4x-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+scd4x-clean:
+    rm -rf {{ scd4x_out }} {{ scd4x_part_dir }}/target
+
+
+# ---- SEN6x virtual part fixture (drivers/sen6x) --------------------------
+
+sen6x_rel := "drivers/sen6x"
+sen6x_dir := justfile_directory() / sen6x_rel
+sen6x_out := build_dir / "sen6x"
+sen6x_port := "127.0.0.1:5582"
+sen6x_part_dir := sen6x_dir / "parts" / "sen6x"
+sen6x_part_wasm := sen6x_dir / "parts" / "sen6x.wasm"
+
+# The part's own tests: the encoding, the CRC and the inputs, on the host.
+sen6x-part-test:
+    cargo test --manifest-path {{ sen6x_part_dir }}/Cargo.toml
+
+# Build the virtual SEN6x -> drivers/sen6x/parts/sen6x.wasm.
+sen6x-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ sen6x_part_dir }}/Cargo.toml"
+    cp "{{ sen6x_part_dir }}/target/wasm32-unknown-unknown/release/sen6x.wasm" \
+        "{{ sen6x_part_wasm }}"
+    ls -l "{{ sen6x_part_wasm }}"
+
+# The driver's own tests: the commands, the CRC check and the decode, on the
+# host.
+sen6x-driver-test:
+    cargo test --manifest-path {{ sen6x_dir }}/sen6x-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+sen6x-check:
+    just check {{ sen6x_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+sen6x-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ sen6x_out }}"
+    just check "{{ sen6x_rel }}"
+    just build "{{ sen6x_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ sen6x_out }}/sen6x.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/sen6x_test" \
+        "{{ sen6x_out }}/sen6x.elf"
+    ls -l "{{ sen6x_out }}/sen6x.bin" "{{ sen6x_out }}/sen6x.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+sen6x-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ sen6x_out }}/sen6x.bin --cosim-board {{ sen6x_dir }}/board.json --control-tcp {{ sen6x_port }} --elf {{ sen6x_out }}/sen6x.elf --timeout {{ timeout }} --log-file {{ sen6x_out }}/emu.log"
+
+# One control line, e.g. "part air input set:pm2-5=50".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+sen6x-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ sen6x_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/sen6x/drivers/sen6x.kdl.
+sen6x-driver-record:
+    just espforge "driver {{ sen6x_rel }} add --local {{ sen6x_rel }}/drivers/sen6x.kdl"
+
+# Happy path: boot, indoor air, more particles and CO2, then a warmer room.
+sen6x-sensor: sen6x-image sen6x-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ sen6x_out }}/sensor.stdout"
+    log="{{ sen6x_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just sen6x-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: sen6x boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x6B on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: sen6x pm1=8.0 pm2.5=12.5 pm4=15.0 pm10=20.0 ug/m3" "the default indoor air (8.0 / 12.5 / 15.0 / 20.0 ug/m3)" 20
+    wait_for "t=22.50 c rh=45.00 voc=100.0 nox=1.0 co2=400 ppm" "the default 22.50 C / 45.00 %RH / 400 ppm" 20
+    just sen6x-part-input "part air input set:pm2-5=50" >/dev/null
+    wait_for "TEST: sen6x pm1=8.0 pm2.5=50.0" "set:pm2-5=50 -> 50.0 ug/m3" 20
+    just sen6x-part-input "part air input set:co2=1000" >/dev/null
+    wait_for "co2=1000 ppm" "set:co2=1000 -> 1000 ppm" 20
+    just sen6x-part-input "part air input set:temperature=30" >/dev/null
+    just sen6x-part-input "part air input set:humidity=60" >/dev/null
+    wait_for "t=30.00 c rh=60.00" "set temperature and humidity -> 30.00 C / 60.00 %RH" 20
+    echo "sen6x-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+sen6x-clean:
+    rm -rf {{ sen6x_out }} {{ sen6x_part_dir }}/target
+
+
+# ---- SGP30 virtual part fixture (drivers/sgp30) --------------------------
+
+sgp30_rel := "drivers/sgp30"
+sgp30_dir := justfile_directory() / sgp30_rel
+sgp30_out := build_dir / "sgp30"
+sgp30_port := "127.0.0.1:5583"
+sgp30_part_dir := sgp30_dir / "parts" / "sgp30"
+sgp30_part_wasm := sgp30_dir / "parts" / "sgp30.wasm"
+
+# The part's own tests: the encoding, the CRC and the inputs, on the host.
+sgp30-part-test:
+    cargo test --manifest-path {{ sgp30_part_dir }}/Cargo.toml
+
+# Build the virtual SGP30 -> drivers/sgp30/parts/sgp30.wasm.
+sgp30-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ sgp30_part_dir }}/Cargo.toml"
+    cp "{{ sgp30_part_dir }}/target/wasm32-unknown-unknown/release/sgp30.wasm" \
+        "{{ sgp30_part_wasm }}"
+    ls -l "{{ sgp30_part_wasm }}"
+
+# The driver's own tests: the commands, the CRC check and the decode, on the
+# host.
+sgp30-driver-test:
+    cargo test --manifest-path {{ sgp30_dir }}/sgp30-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+sgp30-check:
+    just check {{ sgp30_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+sgp30-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ sgp30_out }}"
+    just check "{{ sgp30_rel }}"
+    just build "{{ sgp30_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ sgp30_out }}/sgp30.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/sgp30_test" \
+        "{{ sgp30_out }}/sgp30.elf"
+    ls -l "{{ sgp30_out }}/sgp30.bin" "{{ sgp30_out }}/sgp30.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+sgp30-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ sgp30_out }}/sgp30.bin --cosim-board {{ sgp30_dir }}/board.json --control-tcp {{ sgp30_port }} --elf {{ sgp30_out }}/sgp30.elf --timeout {{ timeout }} --log-file {{ sgp30_out }}/emu.log"
+
+# One control line, e.g. "part air input set:eco2=1000".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+sgp30-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ sgp30_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/sgp30/drivers/sgp30.kdl.
+sgp30-driver-record:
+    just espforge "driver {{ sgp30_rel }} add --local {{ sgp30_rel }}/drivers/sgp30.kdl"
+
+# Happy path: boot, fresh air, more CO2, then a higher TVOC reading.
+sgp30-sensor: sgp30-image sgp30-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ sgp30_out }}/sensor.stdout"
+    log="{{ sgp30_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just sgp30-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: sgp30 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x58 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: sgp30 eco2=400 ppm tvoc=0 ppb" "the default 400 ppm / 0 ppb" 20
+    just sgp30-part-input "part air input set:eco2=1000" >/dev/null
+    wait_for "TEST: sgp30 eco2=1000 ppm tvoc=0 ppb" "set:eco2=1000 -> 1000 ppm" 20
+    just sgp30-part-input "part air input set:tvoc=137" >/dev/null
+    wait_for "TEST: sgp30 eco2=1000 ppm tvoc=137 ppb" "set:tvoc=137 -> 137 ppb" 20
+    echo "sgp30-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+sgp30-clean:
+    rm -rf {{ sgp30_out }} {{ sgp30_part_dir }}/target
+
+
 # ---- examples/001-wifi-basic (networking basics) -------------------------
 
 wifi_basic_dir := justfile_directory() / "examples" / "001-wifi-basic"
