@@ -3180,6 +3180,116 @@ tlv493d-clean:
     rm -rf {{ tlv493d_out }} {{ tlv493d_part_dir }}/target
 
 
+# ---- TMP102 virtual part fixture (drivers/tmp102) ------------------------
+
+tmp102_rel := "drivers/tmp102"
+tmp102_dir := justfile_directory() / tmp102_rel
+tmp102_out := build_dir / "tmp102"
+tmp102_port := "127.0.0.1:5588"
+tmp102_part_dir := tmp102_dir / "parts" / "tmp102"
+tmp102_part_wasm := tmp102_dir / "parts" / "tmp102.wasm"
+
+# The part's own tests: the register file, the left-justified bytes and the
+# input, on the host.
+tmp102-part-test:
+    cargo test --manifest-path {{ tmp102_part_dir }}/Cargo.toml
+
+# Build the virtual TMP102 -> drivers/tmp102/parts/tmp102.wasm.
+tmp102-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ tmp102_part_dir }}/Cargo.toml"
+    cp "{{ tmp102_part_dir }}/target/wasm32-unknown-unknown/release/tmp102.wasm" \
+        "{{ tmp102_part_wasm }}"
+    ls -l "{{ tmp102_part_wasm }}"
+
+# The driver's own tests: the register pointer, the scale and the decode, on
+# the host.
+tmp102-driver-test:
+    cargo test --manifest-path {{ tmp102_dir }}/tmp102-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+tmp102-check:
+    just check {{ tmp102_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+tmp102-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ tmp102_out }}"
+    just check "{{ tmp102_rel }}"
+    just build "{{ tmp102_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ tmp102_out }}/tmp102.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/tmp102_test" \
+        "{{ tmp102_out }}/tmp102.elf"
+    ls -l "{{ tmp102_out }}/tmp102.bin" "{{ tmp102_out }}/tmp102.elf"
+
+# Run the firmware with the virtual sensor on the control channel.
+tmp102-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ tmp102_out }}/tmp102.bin --cosim-board {{ tmp102_dir }}/board.json --control-tcp {{ tmp102_port }} --elf {{ tmp102_out }}/tmp102.elf --timeout {{ timeout }} --log-file {{ tmp102_out }}/emu.log"
+
+# One control line, e.g. "part temp input set:temperature=26.5".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+tmp102-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ tmp102_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/tmp102/drivers/tmp102.kdl.
+tmp102-driver-record:
+    just espforge "driver {{ tmp102_rel }} add --local {{ tmp102_rel }}/drivers/tmp102.kdl"
+
+# Happy path: boot, 25 C from a fresh part, then a warmer and a colder part.
+tmp102-sensor: tmp102-image tmp102-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ tmp102_out }}/sensor.stdout"
+    log="{{ tmp102_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just tmp102-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: tmp102 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x48 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: tmp102 t=25.00 c" "a fresh part reads 25.00 C" 20
+    just tmp102-part-input "part temp input set:temperature=26.5" >/dev/null
+    wait_for "TEST: tmp102 t=26.50 c" "set:temperature=26.5 -> 26.50 C" 20
+    just tmp102-part-input "part temp input set:temperature=-5" >/dev/null
+    wait_for "TEST: tmp102 t=-5.00 c" "set:temperature=-5 -> -5.00 C" 20
+    echo "tmp102-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+tmp102-clean:
+    rm -rf {{ tmp102_out }} {{ tmp102_part_dir }}/target
+
+
 # ---- examples/001-wifi-basic (networking basics) -------------------------
 
 wifi_basic_dir := justfile_directory() / "examples" / "001-wifi-basic"

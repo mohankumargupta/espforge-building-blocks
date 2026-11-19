@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "tmp102": {
+      "kind": "local",
+      "source": "./drivers/tmp102.kdl",
+      "manifest_sha256": "b452d27e0c1a6ca9e9b1a9d11de0c9bb93c236500b08174243312b015a63a29e",
+      "dependencies": [
+        {
+          "package": "tmp102-driver",
+          "path": "../tmp102-driver"
+        }
+      ],
+      "crate": {
+        "package": "tmp102-driver",
+        "path": "../tmp102-driver"
+      }
+    }
+  }
+}

@@ -1,0 +1,3 @@
+{ "parts": {
+    "temp": { "module": "parts/tmp102.wasm", "pins": { "SCL": 6, "SDA": 5 } }
+} }
