@@ -2842,6 +2842,120 @@ sgp30-clean:
     rm -rf {{ sgp30_out }} {{ sgp30_part_dir }}/target
 
 
+# ---- PCA9685 virtual part fixture (drivers/pca9685) ----------------------
+
+pca9685_rel := "drivers/pca9685"
+pca9685_dir := justfile_directory() / pca9685_rel
+pca9685_out := build_dir / "pca9685"
+pca9685_port := "127.0.0.1:5585"
+pca9685_part_dir := pca9685_dir / "parts" / "pca9685"
+pca9685_part_wasm := pca9685_dir / "parts" / "pca9685.wasm"
+
+# The part's own tests: the register file, the writes and the state, on the
+# host.
+pca9685-part-test:
+    cargo test --manifest-path {{ pca9685_part_dir }}/Cargo.toml
+
+# Build the virtual PCA9685 -> drivers/pca9685/parts/pca9685.wasm.
+pca9685-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ pca9685_part_dir }}/Cargo.toml"
+    cp "{{ pca9685_part_dir }}/target/wasm32-unknown-unknown/release/pca9685.wasm" \
+        "{{ pca9685_part_wasm }}"
+    ls -l "{{ pca9685_part_wasm }}"
+
+# The driver's own tests: the init sequence, the prescaler and the duty
+# writes, on the host.
+pca9685-driver-test:
+    cargo test --manifest-path {{ pca9685_dir }}/pca9685-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+pca9685-check:
+    just check {{ pca9685_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+pca9685-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ pca9685_out }}"
+    just check "{{ pca9685_rel }}"
+    just build "{{ pca9685_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ pca9685_out }}/pca9685.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/pca9685_test" \
+        "{{ pca9685_out }}/pca9685.elf"
+    ls -l "{{ pca9685_out }}/pca9685.bin" "{{ pca9685_out }}/pca9685.elf"
+
+# Run the firmware with the virtual part on the control channel.
+pca9685-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ pca9685_out }}/pca9685.bin --cosim-board {{ pca9685_dir }}/board.json --control-tcp {{ pca9685_port }} --elf {{ pca9685_out }}/pca9685.elf --timeout {{ timeout }} --log-file {{ pca9685_out }}/emu.log"
+
+# One control line, e.g. "part pwm state".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+pca9685-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ pca9685_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/pca9685/drivers/pca9685.kdl.
+pca9685-driver-record:
+    just espforge "driver {{ pca9685_rel }} add --local {{ pca9685_rel }}/drivers/pca9685.kdl"
+
+# Happy path: boot, two duties on the bus, and the part's own view of them.
+pca9685-sensor: pca9685-image pca9685-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ pca9685_out }}/sensor.stdout"
+    log="{{ pca9685_out }}/emu.log"
+    state="{{ pca9685_out }}/state.txt"
+    : > "$out"
+    : > "$log"
+    setsid just pca9685-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: pca9685 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x40 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: pca9685 ch0=25 ch1=50" "ch0 at 25 % and ch1 at 50 %" 20
+    just pca9685-part-input "part pwm state" > "$state" 2>&1 || true
+    grep -Eq 'prescale[=: ]+121' "$state" \
+        && echo "PASS: 50 Hz prescale" \
+        || { echo "FAIL: no 50 Hz prescale; see $state" >&2; cat "$state" >&2; exit 1; }
+    grep -Eq 'ch0[=: ]+25' "$state" \
+        && echo "PASS: ch0 reads back at 25 %" \
+        || { echo "FAIL: ch0 is not 25 %; see $state" >&2; cat "$state" >&2; exit 1; }
+    echo "pca9685-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+pca9685-clean:
+    rm -rf {{ pca9685_out }} {{ pca9685_part_dir }}/target
+
+
 # ---- examples/001-wifi-basic (networking basics) -------------------------
 
 wifi_basic_dir := justfile_directory() / "examples" / "001-wifi-basic"

@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "pca9685": {
+      "kind": "local",
+      "source": "./drivers/pca9685.kdl",
+      "manifest_sha256": "f2b3fd40e641601a5d0f28ac5c38ab3f5cce83ae54d0a99615a41a5820f2bdcf",
+      "dependencies": [
+        {
+          "package": "pca9685-driver",
+          "path": "../pca9685-driver"
+        }
+      ],
+      "crate": {
+        "package": "pca9685-driver",
+        "path": "../pca9685-driver"
+      }
+    }
+  }
+}

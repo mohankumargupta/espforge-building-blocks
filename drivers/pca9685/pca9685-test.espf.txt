@@ -1,0 +1,20 @@
+====================
+PCA9685 test firmware
+
+Fixture for drivers/pca9685: the project-local `<pca9685>` driver over I2C,
+wired to the virtual PCA9685 part (SCL = GPIO 6, SDA = GPIO 5, address 0x40).
+Prints `TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="pca9685_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <pca9685 id="pwm" bus="$i2c0" address="0x40" />
+
+# services
