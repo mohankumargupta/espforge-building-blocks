@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "tca95xx": {
+      "kind": "local",
+      "source": "./drivers/tca95xx.kdl",
+      "manifest_sha256": "8c78e3b4d3a1724cf84e0c922c4ecbfd3936267772f8f2e7787533c80d676479",
+      "dependencies": [
+        {
+          "package": "tca95xx-driver",
+          "path": "../tca95xx-driver"
+        }
+      ],
+      "crate": {
+        "package": "tca95xx-driver",
+        "path": "../tca95xx-driver"
+      }
+    }
+  }
+}

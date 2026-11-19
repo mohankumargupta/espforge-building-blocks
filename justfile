@@ -2956,6 +2956,118 @@ pca9685-clean:
     rm -rf {{ pca9685_out }} {{ pca9685_part_dir }}/target
 
 
+# ---- TCA95xx virtual part fixture (drivers/tca95xx) ----------------------
+
+tca95xx_rel := "drivers/tca95xx"
+tca95xx_dir := justfile_directory() / tca95xx_rel
+tca95xx_out := build_dir / "tca95xx"
+tca95xx_port := "127.0.0.1:5586"
+tca95xx_part_dir := tca95xx_dir / "parts" / "tca95xx"
+tca95xx_part_wasm := tca95xx_dir / "parts" / "tca95xx.wasm"
+
+# The part's own tests: the register file, the pins and the state, on the host.
+tca95xx-part-test:
+    cargo test --manifest-path {{ tca95xx_part_dir }}/Cargo.toml
+
+# Build the virtual TCA9535 -> drivers/tca95xx/parts/tca95xx.wasm.
+tca95xx-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ tca95xx_part_dir }}/Cargo.toml"
+    cp "{{ tca95xx_part_dir }}/target/wasm32-unknown-unknown/release/tca95xx.wasm" \
+        "{{ tca95xx_part_wasm }}"
+    ls -l "{{ tca95xx_part_wasm }}"
+
+# The driver's own tests: the configuration and the word write, on the host.
+tca95xx-driver-test:
+    cargo test --manifest-path {{ tca95xx_dir }}/tca95xx-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+tca95xx-check:
+    just check {{ tca95xx_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+tca95xx-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ tca95xx_out }}"
+    just check "{{ tca95xx_rel }}"
+    just build "{{ tca95xx_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ tca95xx_out }}/tca95xx.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/tca95xx_test" \
+        "{{ tca95xx_out }}/tca95xx.elf"
+    ls -l "{{ tca95xx_out }}/tca95xx.bin" "{{ tca95xx_out }}/tca95xx.elf"
+
+# Run the firmware with the virtual part on the control channel.
+tca95xx-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ tca95xx_out }}/tca95xx.bin --cosim-board {{ tca95xx_dir }}/board.json --control-tcp {{ tca95xx_port }} --elf {{ tca95xx_out }}/tca95xx.elf --timeout {{ timeout }} --log-file {{ tca95xx_out }}/emu.log"
+
+# One control line, e.g. "part io state".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+tca95xx-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ tca95xx_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/tca95xx/drivers/tca95xx.kdl.
+tca95xx-driver-record:
+    just espforge "driver {{ tca95xx_rel }} add --local {{ tca95xx_rel }}/drivers/tca95xx.kdl"
+
+# Happy path: boot, the pattern on the bus, and the part's own view of it.
+tca95xx-sensor: tca95xx-image tca95xx-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ tca95xx_out }}/sensor.stdout"
+    log="{{ tca95xx_out }}/emu.log"
+    state="{{ tca95xx_out }}/state.txt"
+    : > "$out"
+    : > "$log"
+    setsid just tca95xx-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: tca95xx boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x20 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: tca95xx outputs=0x00A5" "the app drives 0x00A5" 20
+    just tca95xx-part-input "part io state" > "$state" 2>&1 || true
+    grep -Eq 'config[=: ]+0([[:space:]]|$)' "$state" \
+        && echo "PASS: both ports are outputs" \
+        || { echo "FAIL: the configuration is not 0; see $state" >&2; cat "$state" >&2; exit 1; }
+    grep -Eq 'outputs[=: ]+165([[:space:]]|$)' "$state" \
+        && echo "PASS: the part reads the latch back" \
+        || { echo "FAIL: the latch is not 0x00A5; see $state" >&2; cat "$state" >&2; exit 1; }
+    echo "tca95xx-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+tca95xx-clean:
+    rm -rf {{ tca95xx_out }} {{ tca95xx_part_dir }}/target
+
+
 # ---- examples/001-wifi-basic (networking basics) -------------------------
 
 wifi_basic_dir := justfile_directory() / "examples" / "001-wifi-basic"

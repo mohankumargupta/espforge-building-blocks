@@ -1,0 +1,20 @@
+====================
+TCA95xx test firmware
+
+Fixture for drivers/tca95xx: the project-local `<tca95xx>` driver over I2C,
+wired to the virtual TCA9535 part (SCL = GPIO 6, SDA = GPIO 5, address 0x20).
+Prints `TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="tca95xx_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <tca95xx id="io" bus="$i2c0" address="0x20" />
+
+# services
