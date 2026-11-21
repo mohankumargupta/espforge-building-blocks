@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "ht16k33": {
+      "kind": "local",
+      "source": "./drivers/ht16k33.kdl",
+      "manifest_sha256": "2600a46036943cc899fcc7b82605a6a3c03a369c73c55c215051a154afa1d858",
+      "dependencies": [
+        {
+          "package": "ht16k33-driver",
+          "path": "../ht16k33-driver"
+        }
+      ],
+      "crate": {
+        "package": "ht16k33-driver",
+        "path": "../ht16k33-driver"
+      }
+    }
+  }
+}

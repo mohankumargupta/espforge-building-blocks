@@ -1,0 +1,20 @@
+====================
+PCF857x test firmware
+
+Fixture for drivers/pcf857x: the project-local `<pcf857x>` driver over I2C,
+wired to the virtual PCF8574 part (SCL = GPIO 6, SDA = GPIO 5, address 0x20).
+Prints `TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="pcf857x_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <pcf857x id="io" bus="$i2c0" address="0x20" />
+
+# services

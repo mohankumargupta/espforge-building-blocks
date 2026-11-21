@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "pcf857x": {
+      "kind": "local",
+      "source": "./drivers/pcf857x.kdl",
+      "manifest_sha256": "fb362abae4f5b2d044473b257d575eb48e7d581ba0b8d7680bc24bff5113e7d8",
+      "dependencies": [
+        {
+          "package": "pcf857x-driver",
+          "path": "../pcf857x-driver"
+        }
+      ],
+      "crate": {
+        "package": "pcf857x-driver",
+        "path": "../pcf857x-driver"
+      }
+    }
+  }
+}

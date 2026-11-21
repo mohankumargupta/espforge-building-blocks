@@ -1,0 +1,3 @@
+{ "parts": {
+    "io": { "module": "parts/mcp23xxx.wasm", "pins": { "SCL": 6, "SDA": 5 } }
+} }

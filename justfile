@@ -3290,6 +3290,324 @@ tmp102-clean:
     rm -rf {{ tmp102_out }} {{ tmp102_part_dir }}/target
 
 
+# ---- HT16K33 virtual part fixture (drivers/ht16k33) ----------------------
+
+ht16k33_rel := "drivers/ht16k33"
+ht16k33_dir := justfile_directory() / ht16k33_rel
+ht16k33_out := build_dir / "ht16k33"
+ht16k33_port := "127.0.0.1:5589"
+ht16k33_part_dir := ht16k33_dir / "parts" / "ht16k33"
+ht16k33_part_wasm := ht16k33_dir / "parts" / "ht16k33.wasm"
+
+# The part's own tests: the commands, the RAM wrapping and the inputs, on the
+# host.
+ht16k33-part-test:
+    cargo test --manifest-path {{ ht16k33_part_dir }}/Cargo.toml
+
+# Build the virtual HT16K33 -> drivers/ht16k33/parts/ht16k33.wasm.
+ht16k33-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ ht16k33_part_dir }}/Cargo.toml"
+    cp "{{ ht16k33_part_dir }}/target/wasm32-unknown-unknown/release/ht16k33.wasm" \
+        "{{ ht16k33_part_wasm }}"
+    ls -l "{{ ht16k33_part_wasm }}"
+
+# The driver's own tests: the setup commands, the frame write and the read-back,
+# on the host.
+ht16k33-driver-test:
+    cargo test --manifest-path {{ ht16k33_dir }}/ht16k33-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+ht16k33-check:
+    just check {{ ht16k33_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+ht16k33-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ ht16k33_out }}"
+    just check "{{ ht16k33_rel }}"
+    just build "{{ ht16k33_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ ht16k33_out }}/ht16k33.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/ht16k33_test" \
+        "{{ ht16k33_out }}/ht16k33.elf"
+    ls -l "{{ ht16k33_out }}/ht16k33.bin" "{{ ht16k33_out }}/ht16k33.elf"
+
+# Run the firmware with the virtual part on the control channel.
+ht16k33-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ ht16k33_out }}/ht16k33.bin --cosim-board {{ ht16k33_dir }}/board.json --control-tcp {{ ht16k33_port }} --elf {{ ht16k33_out }}/ht16k33.elf --timeout {{ timeout }} --log-file {{ ht16k33_out }}/emu.log"
+
+# One control line, e.g. "part display input set:brightness=9".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+ht16k33-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ ht16k33_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/ht16k33/drivers/ht16k33.kdl.
+ht16k33-driver-record:
+    just espforge "driver {{ ht16k33_rel }} add --local {{ ht16k33_rel }}/drivers/ht16k33.kdl"
+
+# Happy path: boot, the diagonal frame written and read back every second.
+ht16k33-sensor: ht16k33-image ht16k33-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ ht16k33_out }}/sensor.stdout"
+    log="{{ ht16k33_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just ht16k33-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: ht16k33 boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x70 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: ht16k33 ram=01020408102040800102040810204080" "the frame reads back from the part's RAM" 20
+    echo "ht16k33-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+ht16k33-clean:
+    rm -rf {{ ht16k33_out }} {{ ht16k33_part_dir }}/target
+
+# ---- MCP23xxx virtual part fixture (drivers/mcp23xxx) --------------------
+
+mcp23xxx_rel := "drivers/mcp23xxx"
+mcp23xxx_dir := justfile_directory() / mcp23xxx_rel
+mcp23xxx_out := build_dir / "mcp23xxx"
+mcp23xxx_port := "127.0.0.1:5590"
+mcp23xxx_part_dir := mcp23xxx_dir / "parts" / "mcp23xxx"
+mcp23xxx_part_wasm := mcp23xxx_dir / "parts" / "mcp23xxx.wasm"
+
+# The part's own tests: the register file, the pins and the inputs, on the
+# host.
+mcp23xxx-part-test:
+    cargo test --manifest-path {{ mcp23xxx_part_dir }}/Cargo.toml
+
+# Build the virtual MCP23017 -> drivers/mcp23xxx/parts/mcp23xxx.wasm.
+mcp23xxx-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ mcp23xxx_part_dir }}/Cargo.toml"
+    cp "{{ mcp23xxx_part_dir }}/target/wasm32-unknown-unknown/release/mcp23xxx.wasm" \
+        "{{ mcp23xxx_part_wasm }}"
+    ls -l "{{ mcp23xxx_part_wasm }}"
+
+# The driver's own tests: the constructor, the per-port writes and the read,
+# on the host.
+mcp23xxx-driver-test:
+    cargo test --manifest-path {{ mcp23xxx_dir }}/mcp23xxx-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+mcp23xxx-check:
+    just check {{ mcp23xxx_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+mcp23xxx-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ mcp23xxx_out }}"
+    just check "{{ mcp23xxx_rel }}"
+    just build "{{ mcp23xxx_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ mcp23xxx_out }}/mcp23xxx.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/mcp23xxx_test" \
+        "{{ mcp23xxx_out }}/mcp23xxx.elf"
+    ls -l "{{ mcp23xxx_out }}/mcp23xxx.bin" "{{ mcp23xxx_out }}/mcp23xxx.elf"
+
+# Run the firmware with the virtual part on the control channel.
+mcp23xxx-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ mcp23xxx_out }}/mcp23xxx.bin --cosim-board {{ mcp23xxx_dir }}/board.json --control-tcp {{ mcp23xxx_port }} --elf {{ mcp23xxx_out }}/mcp23xxx.elf --timeout {{ timeout }} --log-file {{ mcp23xxx_out }}/emu.log"
+
+# One control line, e.g. "part io input set:levels=0x5A00".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+mcp23xxx-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ mcp23xxx_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/mcp23xxx/drivers/mcp23xxx.kdl.
+mcp23xxx-driver-record:
+    just espforge "driver {{ mcp23xxx_rel }} add --local {{ mcp23xxx_rel }}/drivers/mcp23xxx.kdl"
+
+# Happy path: boot, port A driving its latch, then the part driving port B.
+mcp23xxx-sensor: mcp23xxx-image mcp23xxx-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ mcp23xxx_out }}/sensor.stdout"
+    log="{{ mcp23xxx_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just mcp23xxx-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: mcp23xxx boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x20 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: mcp23xxx a=aa b=00" "port A drives its outputs and port B reads its pins" 20
+    just mcp23xxx-part-input "part io input set:levels=0x5A00" >/dev/null
+    wait_for "TEST: mcp23xxx a=aa b=5a" "set:levels=0x5A00 -> port B reads 0x5a" 20
+    echo "mcp23xxx-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+mcp23xxx-clean:
+    rm -rf {{ mcp23xxx_out }} {{ mcp23xxx_part_dir }}/target
+
+# ---- PCF857x virtual part fixture (drivers/pcf857x) ----------------------
+
+pcf857x_rel := "drivers/pcf857x"
+pcf857x_dir := justfile_directory() / pcf857x_rel
+pcf857x_out := build_dir / "pcf857x"
+pcf857x_port := "127.0.0.1:5591"
+pcf857x_part_dir := pcf857x_dir / "parts" / "pcf857x"
+pcf857x_part_wasm := pcf857x_dir / "parts" / "pcf857x.wasm"
+
+# The part's own tests: the port, the pins and the world's drive, on the host.
+pcf857x-part-test:
+    cargo test --manifest-path {{ pcf857x_part_dir }}/Cargo.toml
+
+# Build the virtual PCF8574 -> drivers/pcf857x/parts/pcf857x.wasm.
+pcf857x-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ pcf857x_part_dir }}/Cargo.toml"
+    cp "{{ pcf857x_part_dir }}/target/wasm32-unknown-unknown/release/pcf857x.wasm" \
+        "{{ pcf857x_part_wasm }}"
+    ls -l "{{ pcf857x_part_wasm }}"
+
+# The driver's own tests: the port byte and the read, on the host.
+pcf857x-driver-test:
+    cargo test --manifest-path {{ pcf857x_dir }}/pcf857x-driver/Cargo.toml
+
+# Schema, resource graph, manifest discovery and the driver's path dependency.
+pcf857x-check:
+    just check {{ pcf857x_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crate path in the generated Cargo.toml.
+pcf857x-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ pcf857x_out }}"
+    just check "{{ pcf857x_rel }}"
+    just build "{{ pcf857x_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ pcf857x_out }}/pcf857x.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/pcf857x_test" \
+        "{{ pcf857x_out }}/pcf857x.elf"
+    ls -l "{{ pcf857x_out }}/pcf857x.bin" "{{ pcf857x_out }}/pcf857x.elf"
+
+# Run the firmware with the virtual part on the control channel.
+pcf857x-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ pcf857x_out }}/pcf857x.bin --cosim-board {{ pcf857x_dir }}/board.json --control-tcp {{ pcf857x_port }} --elf {{ pcf857x_out }}/pcf857x.elf --timeout {{ timeout }} --log-file {{ pcf857x_out }}/emu.log"
+
+# One control line, e.g. "part io input set:levels=0x0F".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+pcf857x-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ pcf857x_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/pcf857x/drivers/pcf857x.kdl.
+pcf857x-driver-record:
+    just espforge "driver {{ pcf857x_rel }} add --local {{ pcf857x_rel }}/drivers/pcf857x.kdl"
+
+# Happy path: boot, the pins reading back the port, then the world pulling low.
+pcf857x-sensor: pcf857x-image pcf857x-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ pcf857x_out }}/sensor.stdout"
+    log="{{ pcf857x_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just pcf857x-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: pcf857x boot" "firmware boots" 40
+    wait_for_log "answers I2C 0x20 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
+    wait_for "TEST: pcf857x pins=aa" "the eight pins read back what was written" 20
+    just pcf857x-part-input "part io input set:levels=0x0F" >/dev/null
+    wait_for "TEST: pcf857x pins=0a" "set:levels=0x0F -> the pins read 0x0a" 20
+    echo "pcf857x-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+pcf857x-clean:
+    rm -rf {{ pcf857x_out }} {{ pcf857x_part_dir }}/target
+
+
 # ---- examples/001-wifi-basic (networking basics) -------------------------
 
 wifi_basic_dir := justfile_directory() / "examples" / "001-wifi-basic"

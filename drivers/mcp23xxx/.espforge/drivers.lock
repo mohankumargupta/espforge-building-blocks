@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "drivers": {
+    "mcp23xxx": {
+      "kind": "local",
+      "source": "./drivers/mcp23xxx.kdl",
+      "manifest_sha256": "9859d75f15a67474b0f5de51e7e149632b7361a870ecd43e8a96138d211174d3",
+      "dependencies": [
+        {
+          "package": "mcp23xxx-driver",
+          "path": "../mcp23xxx-driver"
+        }
+      ],
+      "crate": {
+        "package": "mcp23xxx-driver",
+        "path": "../mcp23xxx-driver"
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+
+package	devices	category	interfaces	notes
+adxl345	ADXL345	Accelerometer	I2C;SPI	3-axis accelerometer
+apa102	APA102	LED Strip	SPI	Addressable RGB LED strip
+bmxx80	BMP280;BME280	Environmental Sensor	I2C;SPI	Temperature/pressure; humidity on BME280
+hd44780	HD44780;Adafruit I2C/SPI Backpack;PCF857x Backpack	Character Display	GPIO;I2C;SPI	HD44780 LCD driver
+max7219	MAX7219;MAX7221	7-Segment / LED Matrix	SPI	Cascadable LED display driver
+mcp23xxx	MCP23S08;MCP23S09;MCP23S17;MCP23S18	GPIO Expander	SPI	8-bit and 16-bit SPI GPIO expanders
+mfrc522	MFRC522	RFID Reader	SPI;GPIO	MIFARE RFID card reader
+mpu9250	MPU-9250	9-Axis IMU	I2C;SPI	Accelerometer; gyroscope; magnetometer
+nrzled	SK6812;UCS1903	LED Strip	GPIO Stream;SPI	Single-wire NRZ RGB/RGBW LED strips
+nxp74hc595	74HC595	Shift Register	SPI	8-bit serial-to-parallel shift register
+ssd1306	SSD1306;SH1106;SH1107	OLED Display	I2C;SPI	Monochrome OLED display controller
+st7567	ST7567	Dot Matrix LCD	SPI;GPIO	128x64 monochrome LCD controller

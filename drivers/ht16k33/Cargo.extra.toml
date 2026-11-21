@@ -1,0 +1,16 @@
+# esp-emu never sets the I2C master's `sr.resp_rec` bit, so every esp-hal
+# transaction fails with `AcknowledgeCheckFailed(Data)`. The vendored patch in
+# ../../esp-hal drops that check behind an `esp-emu` feature.
+#
+# espforge owns the generated `dependencies.esp-hal` line (a `features` edit
+# there is overwritten on every build), so the feature is pulled in through
+# this crate's own default feature instead. The `path` is relative to the
+# merged manifest in build/build/, never to this file.
+#
+# Never flash an `esp-emu` build to a real board: it also hides genuine
+# data-phase ACK failures. See i2c-drivers-workaround.md.
+[features]
+default = ["esp-hal/esp-emu"]
+
+[patch.crates-io]
+esp-hal = { path = "../../esp-hal" }

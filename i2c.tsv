@@ -1,0 +1,36 @@
+
+package	devices	category	interfaces	default_i2c_addr	notes
+ads1x15	ADS1015;ADS1115	ADC	I2C	0x48	12-bit / 16-bit ADC
+adxl345	ADXL345	Accelerometer	I2C;SPI	0x53 (example)	3-axis accelerometer
+aht20	AHT20	Temperature;Humidity	I2C	0x38	Environmental sensor
+aip31068	AIP31068	Character Display	I2C		HD44780-compatible I2C LCD driver
+am2320	AM2320	Temperature;Humidity	I2C	0x5c	Temperature and humidity sensor
+as7262	AS7262	Spectral Sensor	I2C	0x49	6-channel visible spectral sensor
+bh1750	BH1750	Ambient Light	I2C	0x23 (alt 0x5c)	Ambient light sensor
+bmxx80	BMP180;BMP280;BME280	Environmental Sensor	I2C;SPI	0x76;0x77	Temperature/pressure (+humidity on BME280)
+cap1xxx	CAP1105;CAP1106;CAP1126;CAP1128;CAP1133;CAP1166;CAP1188	Capacitive Touch	I2C	0x28 (0x28-0x2c)	Capacitive touch sensor and LED driver
+ccs811	CCS811	Air Quality	I2C	0x5A (0x5A-0x5B)	VOC / eCO2 sensor
+ds248x	DS2482-100;DS2482-800;DS2483	1-Wire Bridge	I2C	0x18-0x21	I2C-to-1-Wire bridge
+ep0099	EP-0099	Relay HAT	I2C	0x10-0x13	4-channel relay HAT
+hd44780	HD44780;Adafruit I2C/SPI Backpack;PCF857x Backpack	Character Display	GPIO;I2C;SPI		Hitachi HD44780 LCD driver
+hdc302x	HDC3021;HDC3022	Temperature;Humidity	I2C	0x44	High-accuracy temperature/humidity sensor
+ht16k33	HT16K33	LED / Alphanumeric Display	I2C	0x70	16x8 LED matrix and 4-digit alphanumeric driver
+ina219	INA219	Power Monitor	I2C	0x40 (0x40-0x4f)	Current/voltage/power monitor
+mcp23xxx	MCP23008;MCP23S08;MCP23009;MCP23S09;MCP23016;MCP23017;MCP23S17;MCP23018;MCP23S18	GPIO Expander	I2C;SPI	0x20-0x27	8-bit and 16-bit I/O expanders
+mcp472x	MCP4725;MCP4728	DAC	I2C	0x60	12-bit DAC (1 or 4 channels)
+mcp9808	MCP9808	Temperature	I2C	0x18 (0x18-0x1f)	Digital temperature sensor with alerts
+mpu9250	MPU-9250	9-Axis IMU	I2C;SPI		3-axis gyro/accelerometer/magnetometer
+pca9548	PCA9548;PCA9548A	I2C Multiplexer	I2C	0x70 (0x70-0x77)	8-port I2C multiplexer
+pca9633	PCA9633	LED PWM Controller	I2C		4-channel LED PWM controller
+pca9685	PCA9685	PWM / Servo Controller	I2C	0x40	16-channel 12-bit PWM controller
+pcf857x	PCF8574;PCF8575	GPIO Expander	I2C	0x20	8-bit and 16-bit quasi-bidirectional expander
+scd4x	SCD40;SCD41	Environmental Sensor	I2C	0x62	CO2/temperature/humidity sensor
+sen6x	SEN62;SEN63C;SEN65;SEN66;SEN68;SEN69C	Environmental Sensor	I2C	0x6b	PM/RH/T/VOC/NOx/HCHO/CO2 sensor family
+sgp30	SGP30	Air Quality	I2C	0x58	CO2 and TVOC air-quality sensor
+sht4x	SHT40;SHT41;SHT45	Temperature;Humidity	I2C	0x44	Temperature and humidity sensor with heater
+sn3218	SN3218	LED Driver	I2C	0x54	18-channel LED driver
+ssd1306	SSD1306;SH1106;SH1107	OLED Display	I2C;SPI	0x3c	Monochrome OLED display controller
+tca95xx	PCA9536;TCA6408A;TCA6416;TCA6416A;TCA9534;TCA9534A;TCA9535;TCA9537;TCA9538;TCA9539;TCA9554;TCA9555	GPIO Expander	I2C	0x20-0x77 (varies by variant)	4/8/16-bit I2C GPIO expanders
+tic	Tic T825;Tic T834;Tic T500;Tic T249;Tic 36v4	Stepper Motor Controller	I2C	0x0E	Pololu Tic stepper controllers
+tlv493d	TLV493D	Magnetic / Temperature	I2C	0x5e (alt 0x1f)	3D Hall-effect magnetic and temperature sensor
+tmp102	TMP102;TMP112;TMP75	Temperature	I2C		Digital temperature sensor with alerts

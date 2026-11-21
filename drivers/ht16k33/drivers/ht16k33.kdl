@@ -1,0 +1,34 @@
+// The external `<ht16k33>` driver: a project-local manifest, not a module in
+// espforge-drivers. `codegen.feature` is absent, so the dependency below is
+// written into the generated project's Cargo.toml instead of selecting an
+// espforge-drivers feature.
+driver "ht16k33" {
+    format_version 2
+    summary "Holtek HT16K33 LED matrix and alphanumeric display driver on I2C"
+    description "Drives a Holtek HT16K33 over an I2C bus. The part is command-addressed: the driver turns the internal oscillator and the display on at construction, then loads the 16-byte display RAM (8 rows of 16 columns, two bytes per row) with one write and reads it back through the same address. The dimming command sets the brightness level. The Rust half is the `ht16k33-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    category "display"
+
+    dependency "ht16k33-driver" {
+        path "../ht16k33-driver"
+    }
+
+    bus "i2c" {
+        address allowed="0x70..=0x77"
+    }
+
+    codegen {
+        runtime "blocking" {
+            type "ht16k33_driver::Ht16k33<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
+            constructor "ht16k33_driver::Ht16k33::new({bus_device}, {address})"
+            endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the display during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<ht16k33 id=\"display\" bus=\"$i2c0\" address=\"0x70\" />"#
+    see_also "peripherals/i2c"
+}

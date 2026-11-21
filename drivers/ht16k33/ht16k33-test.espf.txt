@@ -1,0 +1,20 @@
+====================
+HT16K33 test firmware
+
+Fixture for drivers/ht16k33: the project-local `<ht16k33>` driver over I2C,
+wired to the virtual HT16K33 part (SCL = GPIO 6, SDA = GPIO 5, address 0x70).
+Prints `TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="ht16k33_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <ht16k33 id="display" bus="$i2c0" address="0x70" />
+
+# services
