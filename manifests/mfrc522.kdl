@@ -1,7 +1,10 @@
 // The external `<mfrc522>` driver: a project-local manifest, not a module in
-// espforge-drivers (there is no bundled MFRC522 driver). `codegen.feature` is
-// absent, so the dependency below is written into the generated project's
-// Cargo.toml instead of selecting an espforge-drivers feature.
+// espforge-drivers (there is no bundled MFRC522 driver). It is not manifest
+// only yet: the published `mfrc522` 0.8.0 crate needs the bus wrapped in its
+// `SpiInterface` and an `init()` typestate rebind, so the protocol stays in
+// the `mfrc522-driver` crate beside this manifest. The `dependency` block
+// points the generated project at that crate; no `espforge-drivers` feature is
+// involved.
 driver "mfrc522" {
     format_version 2
     summary "NXP MFRC522 contactless reader with a MIFARE Classic card on SPI"

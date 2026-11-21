@@ -1,7 +1,9 @@
 // The external `<tlv493d>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// espforge-drivers. It is not manifest only: no `tlv493d` crate is published
+// and `sensor-tlv493d` 0.2.0 is `embedded-hal` 0.2, so the protocol stays in
+// the `tlv493d-driver` crate beside this manifest. The `dependency` block
+// points the generated project at that crate; no `espforge-drivers` feature is
+// involved.
 driver "tlv493d" {
     format_version 2
     summary "Infineon TLV493D-A1B6 3D magnetic sensor on I2C"

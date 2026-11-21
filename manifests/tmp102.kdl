@@ -1,7 +1,9 @@
 // The external `<tmp102>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// espforge-drivers. It is not manifest only: `tmp102` 1.0.0 is a Linux
+// `i2cdev` crate and `tmp1x2` 1.1.0 is `nb`-based over `embedded-hal` 0.2, so
+// the protocol stays in the `tmp102-driver` crate beside this manifest. The
+// `dependency` block points the generated project at that crate; no
+// `espforge-drivers` feature is involved.
 driver "tmp102" {
     format_version 2
     summary "TI TMP102 temperature sensor on I2C"

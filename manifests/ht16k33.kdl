@@ -1,7 +1,9 @@
 // The external `<ht16k33>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// espforge-drivers. It is not manifest only: the published `ht16k33` 0.4.0
+// crate declares `embedded-hal ^0.2`, so the protocol stays in the
+// `ht16k33-driver` crate beside this manifest. The `dependency` block points
+// the generated project at that crate; no `espforge-drivers` feature is
+// involved.
 driver "ht16k33" {
     format_version 2
     summary "Holtek HT16K33 LED matrix and alphanumeric display driver on I2C"

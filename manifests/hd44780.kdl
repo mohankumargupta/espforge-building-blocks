@@ -1,7 +1,8 @@
-// The external `<hd44780>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependencies below are
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// The external `<hd44780>` driver: manifest only. The published
+// `i2c-character-display` 0.6.0 crate implements the HD44780 controller and
+// its PCF8574T I2C backpack over `embedded-hal` 1.0, so this `.kdl` is the
+// whole driver. The `dependency` block writes that crate into the generated
+// project's `Cargo.toml`; no `espforge-drivers` module or feature is involved.
 //
 // The display is an HD44780 in 4-bit mode behind a PCF8574T I2C backpack, the
 // common "I2C LCD" adapter. `i2c-character-display` 0.6.0's

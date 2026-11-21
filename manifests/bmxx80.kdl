@@ -1,7 +1,9 @@
 // The external `<bmxx80>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// espforge-drivers. It is not manifest only: no `bmxx80` crate exists, and the
+// BMP280/BME680 coverage the tag implies is in no published crate, so the
+// protocol stays in the `bmxx80-driver` crate beside this manifest. The
+// `dependency` block points the generated project at that crate; no
+// `espforge-drivers` feature is involved.
 driver "bmxx80" {
     format_version 2
     summary "Bosch BME280 temperature, pressure and humidity sensor on I2C"

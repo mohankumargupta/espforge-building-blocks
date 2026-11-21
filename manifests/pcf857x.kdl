@@ -1,7 +1,9 @@
 // The external `<pcf857x>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// espforge-drivers. It is not manifest only yet: the published `pcf857x` 0.5.0
+// crate takes its own `SlaveAddr` type, so the protocol stays in the
+// `pcf857x-driver` crate beside this manifest. The `dependency` block points
+// the generated project at that crate; no `espforge-drivers` feature is
+// involved.
 driver "pcf857x" {
     format_version 2
     summary "NXP PCF8574 8-bit quasi-bidirectional I2C I/O expander driver"

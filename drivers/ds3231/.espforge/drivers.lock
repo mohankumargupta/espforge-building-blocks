@@ -4,16 +4,15 @@
     "ds3231": {
       "kind": "local",
       "source": "./drivers/ds3231.kdl",
-      "manifest_sha256": "851e0d3216d1998b4159489fb3fcb2fea727ce09bf1d7601cf458d9d6fc5057a",
+      "manifest_sha256": "4bd2cb4989e8b575815a352959f56d067fe00690cee9d11fe0eafb6bf05a1492",
       "dependencies": [
         {
-          "package": "ds3231-driver",
-          "path": "../ds3231-driver"
+          "package": "ds323x"
         }
       ],
       "crate": {
-        "package": "ds3231-driver",
-        "path": "../ds3231-driver"
+        "package": "ds323x",
+        "version": "0.7.0"
       }
     }
   }

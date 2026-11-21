@@ -1,7 +1,9 @@
 // The external `<sen6x>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// espforge-drivers. It is not manifest only yet: the published `sen6x` 0.1.4
+// crate takes the delay before the bus and returns the sensor without a
+// `Result`, so the protocol stays in the `sen6x-driver` crate beside this
+// manifest. The `dependency` block points the generated project at that crate;
+// no `espforge-drivers` feature is involved.
 driver "sen6x" {
     format_version 2
     summary "Sensirion SEN6x air-quality sensor on I2C"

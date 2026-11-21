@@ -1,9 +1,10 @@
-//! Happy-path fixture for the project-local `<aip31068>` driver.
+//! Happy-path fixture for the `<aip31068>` driver.
 //!
 //! The driver itself is the generated `lcd` device: `Devices::new` builds
-//! `aip31068_driver::Aip31068`, which sends the HD44780 power-on sequence
-//! (function set, display on, clear, entry mode). This app then writes the
-//! two lines once a second, so a write error cannot hide:
+//! `i2c_character_display::CharacterDisplayAIP31068`. The crate needs an
+//! explicit `init()` after construction (the AiP31068's 8-bit function set,
+//! display on, clear and entry mode), so `setup` runs it, then this app writes
+//! the two lines once a second:
 //!
 //! - `TEST: aip31068 boot`
 //! - `TEST: lcd aip31068-lcd / hello-i2c` once a second
@@ -25,19 +26,30 @@ const BANNER: &str = "aip31068-lcd";
 const FOOTER: &str = "hello-i2c";
 
 pub fn setup(ctx: &mut Context) {
-    ctx.logger.info("TEST: aip31068 boot");
+    match device!(ctx, lcd).init() {
+        Ok(()) => ctx.logger.info("TEST: aip31068 boot"),
+        Err(error) => ctx
+            .logger
+            .error(format_args!("TEST: lcd init failed: {error:?}")),
+    }
 }
 
 pub fn forever(ctx: &mut Context) {
-    let banner = device!(ctx, lcd).write_line(0, BANNER);
-    let footer = device!(ctx, lcd).write_line(1, FOOTER);
-    match (banner, footer) {
-        (Ok(()), Ok(())) => ctx
-            .logger
-            .info(format_args!("TEST: lcd {BANNER} / {FOOTER}")),
-        (banner, footer) => ctx
-            .logger
-            .error(format_args!("TEST: lcd write failed: {banner:?} {footer:?}")),
+    // `set_cursor(col, row)` is zero-indexed, so (0, 0) and (0, 1) are the two
+    // rows' first columns.
+    let banner = device!(ctx, lcd)
+        .set_cursor(0, 0)
+        .and_then(|lcd| lcd.print(BANNER))
+        .is_ok();
+    let footer = device!(ctx, lcd)
+        .set_cursor(0, 1)
+        .and_then(|lcd| lcd.print(FOOTER))
+        .is_ok();
+    if banner && footer {
+        ctx.logger
+            .info(format_args!("TEST: lcd {BANNER} / {FOOTER}"));
+    } else {
+        ctx.logger.error("TEST: lcd write failed");
     }
     ctx.delay.delay_ms(UPDATE_INTERVAL_MS);
 }

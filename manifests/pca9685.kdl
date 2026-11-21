@@ -1,7 +1,9 @@
 // The external `<pca9685>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// espforge-drivers. It is not manifest only yet: the published `pwm-pca9685`
+// 1.0.0 crate takes its own address type (a six-bool tuple), so the protocol
+// stays in the `pca9685-driver` crate beside this manifest. The `dependency`
+// block points the generated project at that crate; no `espforge-drivers`
+// feature is involved.
 driver "pca9685" {
     format_version 2
     summary "NXP PCA9685 16-channel PWM controller on I2C"

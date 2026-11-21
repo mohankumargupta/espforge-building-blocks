@@ -1,7 +1,9 @@
 // The external `<am2320>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// espforge-drivers. It is not manifest only: the published `am2320` 0.2.0
+// crate declares `embedded-hal ^0.2`, so the protocol stays in the
+// `am2320-driver` crate beside this manifest. The `dependency` block points
+// the generated project at that crate; no `espforge-drivers` feature is
+// involved.
 driver "am2320" {
     format_version 2
     summary "AOSONG AM2320 temperature and relative humidity sensor on I2C"

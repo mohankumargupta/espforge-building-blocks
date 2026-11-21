@@ -4,16 +4,15 @@
     "mcp9808": {
       "kind": "local",
       "source": "./drivers/mcp9808.kdl",
-      "manifest_sha256": "f6d4b5cc464d7a17d63cf5f86c0ae166bb98e5be7b42b42335222f6add32ccc5",
+      "manifest_sha256": "d2f40946fe65339d0ba23e737ce6f51a13d02a3babd041e677dd2c082e4e5dc3",
       "dependencies": [
         {
-          "package": "mcp9808-driver",
-          "path": "../mcp9808-driver"
+          "package": "mcp9808"
         }
       ],
       "crate": {
-        "package": "mcp9808-driver",
-        "path": "../mcp9808-driver"
+        "package": "mcp9808",
+        "version": "0.4.0"
       }
     }
   }

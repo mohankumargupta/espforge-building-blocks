@@ -1,7 +1,10 @@
 // The external `<mpu9250>` driver: a project-local manifest, not a module in
-// espforge-drivers (there is no bundled MPU-9250 driver). `codegen.feature` is
-// absent, so the dependency below is written into the generated project's
-// Cargo.toml instead of selecting an espforge-drivers feature.
+// espforge-drivers (there is no bundled MPU-9250 driver). It is not manifest
+// only: the published `mpu9250` 0.25.0 crate declares `embedded-hal ^0.2.3`
+// and yields an `Imu`/`Marg` typestate, so the protocol stays in the
+// `mpu9250-driver` crate beside this manifest. The `dependency` block points
+// the generated project at that crate; no `espforge-drivers` feature is
+// involved.
 driver "mpu9250" {
     format_version 2
     summary "InvenSense MPU-9250 accelerometer and gyro on SPI"

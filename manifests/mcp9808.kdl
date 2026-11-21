@@ -1,25 +1,29 @@
-// The external `<mcp9808>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// The external `<mcp9808>` driver: manifest only. The published `mcp9808`
+// 0.4.0 crate implements the part over `embedded-hal` 1.0 and `new(i2c)`
+// builds it in one call, so this `.kdl` is the whole driver. The `dependency`
+// block writes that crate into the generated project's `Cargo.toml`; no
+// `espforge-drivers` module or feature is involved.
+//
+// `mcp9808` 0.4.0's `MCP9808::new(i2c)` returns the driver directly and takes
+// no address, so `fallible #false` and the manifest fixes the crate's default
+// 0x18 (the crate's `set_address` is not expressible in a constructor).
 driver "mcp9808" {
     format_version 2
     summary "Microchip MCP9808 temperature sensor on I2C"
-    description "Reads the ambient temperature from a Microchip MCP9808 over an I2C bus. The driver checks the manufacturer and device identification registers and sets the resolution to 0.0625 C at construction, then reads the ambient register and decodes the 13-bit two's complement temperature. The Rust half is the `mcp9808-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    description "Reads the ambient temperature from a Microchip MCP9808 over an I2C bus. The crate reads the 16-bit ambient register, masks the alert flags and decodes the 13-bit two's complement temperature in 0.0625 C steps. Its `new()` takes no address, so the element is fixed at the crate's default 0x18. The Rust half is the published `mcp9808` crate, so this manifest is the whole driver."
     category "sensor"
 
-    dependency "mcp9808-driver" {
-        path "../mcp9808-driver"
-    }
+    dependency "mcp9808" { version "0.4.0" }
 
     bus "i2c" {
-        address allowed="0x18..=0x1F"
+        address fixed="0x18"
     }
 
     codegen {
+        fallible #false
         runtime "blocking" {
-            type "mcp9808_driver::Mcp9808<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
-            constructor "mcp9808_driver::Mcp9808::new({bus_device}, {address})"
+            type "mcp9808::MCP9808<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
+            constructor "mcp9808::MCP9808::new({bus_device})"
             endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
         }
     }

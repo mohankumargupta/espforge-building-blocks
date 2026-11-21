@@ -1,8 +1,8 @@
-// The external `<max7219>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature. Manifest only: the type and constructor come
-// straight from the `max7219` crate, so there is no Rust half beside this file.
+// The external `<max7219>` driver: manifest only. The published `max7219`
+// 0.5.0 crate drives the chip from three GPIO lines over `embedded-hal` 1.0,
+// so this `.kdl` is the whole driver and no Rust half sits beside it. The
+// `dependency` block writes that crate into the generated project's
+// `Cargo.toml`; no `espforge-drivers` module or feature is involved.
 //
 // `bus "none"`: the chip's interface is three GPIO lines the driver toggles
 // itself, not a hardware SPI peripheral. The constructor therefore takes the

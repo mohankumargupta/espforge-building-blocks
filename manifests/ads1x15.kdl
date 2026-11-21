@@ -1,7 +1,9 @@
 // The external `<ads1x15>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// espforge-drivers. It is not manifest only: no published crate covers both
+// the ADS1015 and the ADS1115 over `embedded-hal` 1.0, so the protocol stays
+// in the `ads1x15-driver` crate beside this manifest. The `dependency` block
+// points the generated project at that crate; no `espforge-drivers` feature
+// is involved.
 //
 // The constructor names the chip it decodes for: this manifest instantiates
 // `Chip::Ads1115` (16-bit). Change the literal to

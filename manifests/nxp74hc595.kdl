@@ -1,7 +1,8 @@
-// The external `<nxp74hc595>` driver: a project-local manifest, not a module
-// in espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// The external `<nxp74hc595>` driver: manifest only. The published
+// `drive_74hc595` 0.2.0 crate drives the shift register from five GPIO lines
+// over `embedded-hal` 1.0, so this `.kdl` is the whole driver. The
+// `dependency` block writes that crate into the generated project's
+// `Cargo.toml`; no `espforge-drivers` module or feature is involved.
 //
 // `bus "none"`: the chip has no bus controller of its own, just SER data,
 // SRCLK shift clock, RCLK latch clock, an active-low SRCLR and an active-low

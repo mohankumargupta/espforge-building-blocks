@@ -4,16 +4,15 @@
     "aip31068": {
       "kind": "local",
       "source": "./drivers/aip31068.kdl",
-      "manifest_sha256": "0b78d0b1f0a7de3db6b2bf19bf4b69ad1bc3d3a7584fe53f1b6796d8685698f8",
+      "manifest_sha256": "f4d2e1262d9e84d5394e0c4a3ba3a0dbb68f24a5a616f3d16ed5891bb139ea3f",
       "dependencies": [
         {
-          "package": "aip31068-driver",
-          "path": "../aip31068-driver"
+          "package": "i2c-character-display"
         }
       ],
       "crate": {
-        "package": "aip31068-driver",
-        "path": "../aip31068-driver"
+        "package": "i2c-character-display",
+        "version": "0.6.0"
       }
     }
   }

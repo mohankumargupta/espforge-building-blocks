@@ -1,9 +1,8 @@
-//! Happy-path fixture for the project-local `<ds3231>` driver.
+//! Happy-path fixture for the `<ds3231>` driver.
 //!
 //! The driver itself is the generated `rtc` device: `Devices::new` builds
-//! `ds3231_driver::Ds3231`, which clears the oscillator-stop flag and checks
-//! that the part holds a valid binary-coded-decimal time. This app then reads
-//! the date and time and the die temperature once a second:
+//! `ds323x::Ds323x::new_ds3231`. This app then reads the date and time and the
+//! die temperature once a second:
 //!
 //! - `TEST: ds3231 boot`
 //! - `TEST: ds3231 2026-01-01 00:00:00 w=1` once a second
@@ -16,6 +15,8 @@
 
 use crate::Context;
 
+use ds323x::{Datelike, DateTimeAccess, Rtcc, Timelike};
+
 /// One reading a second, so an interaction is visible in the next line.
 const UPDATE_INTERVAL_MS: u32 = 1_000;
 
@@ -24,14 +25,21 @@ pub fn setup(ctx: &mut Context) {
 }
 
 pub fn forever(ctx: &mut Context) {
-    match device!(ctx, rtc).datetime() {
-        Ok(time) => ctx.logger.info(format_args!(
+    // `datetime()` derives the weekday from the calendar date; the fixture's
+    // part stores day 1 in its own weekday register, so read that instead.
+    let weekday = device!(ctx, rtc).weekday();
+    match (device!(ctx, rtc).datetime(), weekday) {
+        (Ok(time), Ok(weekday)) => ctx.logger.info(format_args!(
             "TEST: ds3231 {}-{:02}-{:02} {:02}:{:02}:{:02} w={}",
-            time.year, time.month, time.day, time.hour, time.minute, time.second, time.weekday
+            time.year(),
+            time.month(),
+            time.day(),
+            time.hour(),
+            time.minute(),
+            time.second(),
+            weekday
         )),
-        Err(error) => ctx
-            .logger
-            .error(format_args!("TEST: ds3231 read failed: {error:?}")),
+        _ => ctx.logger.error("TEST: ds3231 read failed"),
     }
     match device!(ctx, rtc).temperature() {
         Ok(celsius) => ctx

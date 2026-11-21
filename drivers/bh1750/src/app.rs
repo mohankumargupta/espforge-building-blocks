@@ -1,7 +1,7 @@
-//! Happy-path fixture for the project-local `<bh1750>` driver.
+//! Happy-path fixture for the `<bh1750>` driver.
 //!
 //! The driver itself is the generated `light` device: `Devices::new` builds
-//! `bh1750_driver::Bh1750`, which powers the part on. This app then takes one
+//! `bh1750::BH1750`, which powers the part on. This app then takes one
 //! one-shot high-resolution measurement a second and logs the illuminance:
 //!
 //! - `TEST: bh1750 boot`
@@ -20,7 +20,7 @@ pub fn setup(ctx: &mut Context) {
 }
 
 pub fn forever(ctx: &mut Context) {
-    match device!(ctx, light).read() {
+    match device!(ctx, light).get_one_time_measurement(bh1750::Resolution::High) {
         Ok(lux) => ctx
             .logger
             .info(format_args!("TEST: bh1750 lux={lux:.1}")),

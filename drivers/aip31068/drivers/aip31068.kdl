@@ -1,25 +1,29 @@
-// The external `<aip31068>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// The external `<aip31068>` driver. `codegen.feature` is absent, so the
+// dependency below is written into the generated project's Cargo.toml instead
+// of selecting an espforge-drivers feature.
+//
+// `i2c-character-display` 0.6.0's `CharacterDisplayAIP31068::new(i2c,
+// lcd_type, delay)` returns the display directly (the controller has a fixed
+// address), so `fallible #false` and no `{address}` in the constructor. The
+// crate's `init()` must run before the first write; the fixture calls it in
+// `setup`, since it is a fallible step, not part of construction.
 driver "aip31068" {
     format_version 2
     summary "AiP31068 16x2 character LCD controller on I2C"
-    description "Writes text to a 16-character, 2-line character LCD over an I2C bus. A transaction is a control byte (0x00 for an instruction, 0x40 for display data) followed by the bytes it applies to; the instruction set is the HD44780's, so the driver initializes the part with a function set, display on, clear and entry mode, then addresses a row in DDRAM and writes. The Rust half is the `aip31068-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    description "Writes text to a 16-character, 2-line character LCD over an I2C bus. The controller takes a control byte (0x00 for an instruction, 0x40 for display data) followed by the bytes it applies to; the crate's `init()` sends the AiP31068's 8-bit function set, display on, clear and entry mode, then `set_cursor` and `print` address a row and write. The Rust half is the published `i2c-character-display` crate, so this manifest is the whole driver."
     category "display"
 
-    dependency "aip31068-driver" {
-        path "../aip31068-driver"
-    }
+    dependency "i2c-character-display" { version "0.6.0" }
 
     bus "i2c" {
-        address allowed="0x3e..=0x3e"
+        address fixed="0x3e"
     }
 
     codegen {
+        fallible #false
         runtime "blocking" {
-            type "aip31068_driver::Aip31068<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
-            constructor "aip31068_driver::Aip31068::new({bus_device}, {address})"
+            type "i2c_character_display::CharacterDisplayAIP31068<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>, espforge_runtime::Delay>"
+            constructor "i2c_character_display::CharacterDisplayAIP31068::new({bus_device}, i2c_character_display::LcdDisplayType::Lcd16x2, espforge_runtime::Delay::new())"
             endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
         }
     }

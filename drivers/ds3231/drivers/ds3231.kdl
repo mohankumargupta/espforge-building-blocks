@@ -1,25 +1,28 @@
-// The external `<ds3231>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// The external `<ds3231>` driver. `codegen.feature` is absent, so the
+// dependency below is written into the generated project's Cargo.toml instead
+// of selecting an espforge-drivers feature.
+//
+// `ds323x` 0.7.0's `Ds323x::new_ds3231(i2c)` is infallible and fixes the part
+// at 0x68, so `fallible #false` and the manifest declares `fixed="0x68"`.
+// The typestate is `Ds323x<I2cInterface<I2C>, DS3231>`; date/time comes from
+// the crate's `DateTimeAccess`/`Rtcc` traits.
 driver "ds3231" {
     format_version 2
     summary "Maxim DS3231 temperature-compensated real-time clock on I2C"
-    description "Keeps and reads the date and time of a DS3231 over an I2C bus. The driver clears the oscillator-stop flag at construction, checks that the seven time registers hold a valid binary-coded-decimal time, then reads seconds, minutes, hours, the day-of-week counter, the date, the month and the year, and the die temperature in quarter degrees. The registers are BCD, so the driver converts both ways and can also write a time back. The Rust half is the `ds3231-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    description "Keeps and reads the date and time of a DS3231 over an I2C bus. The seven time registers are binary-coded decimal; the crate converts both ways, exposes `datetime()` and the individual fields, and reads the die temperature in quarter degrees. The Rust half is the published `ds323x` crate, so this manifest is the whole driver."
     category "time"
 
-    dependency "ds3231-driver" {
-        path "../ds3231-driver"
-    }
+    dependency "ds323x" { version "0.7.0" }
 
     bus "i2c" {
-        address allowed="0x68..=0x68"
+        address fixed="0x68"
     }
 
     codegen {
+        fallible #false
         runtime "blocking" {
-            type "ds3231_driver::Ds3231<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
-            constructor "ds3231_driver::Ds3231::new({bus_device}, {address})"
+            type "ds323x::Ds323x<ds323x::interface::I2cInterface<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>, ds323x::ic::DS3231>"
+            constructor "ds323x::Ds323x::new_ds3231({bus_device})"
             endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
         }
     }

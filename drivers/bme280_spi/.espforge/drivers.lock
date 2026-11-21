@@ -4,16 +4,15 @@
     "bme280_spi": {
       "kind": "local",
       "source": "./drivers/bme280_spi.kdl",
-      "manifest_sha256": "d140030e464d75b6596aa97d0c4fd6d65ce16641ece3378ee656bf16eb028acd",
+      "manifest_sha256": "a9e0a276be56c2a7df0ad402013ab96f82f6f1048ecd29088484f896ece0cc27",
       "dependencies": [
         {
-          "package": "bme280-spi-driver",
-          "path": "../bme280-spi-driver"
+          "package": "bme280"
         }
       ],
       "crate": {
-        "package": "bme280-spi-driver",
-        "path": "../bme280-spi-driver"
+        "package": "bme280",
+        "version": "0.5.1"
       }
     }
   }

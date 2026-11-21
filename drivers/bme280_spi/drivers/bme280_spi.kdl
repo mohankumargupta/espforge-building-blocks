@@ -1,16 +1,18 @@
-// The external `<bme280_spi>` driver: a project-local manifest, not a module
-// in espforge-drivers (there is no bundled BME280 driver). `codegen.feature`
-// is absent, so the dependency below is written into the generated project's
-// Cargo.toml instead of selecting an espforge-drivers feature.
+// The external `<bme280_spi>` driver. `codegen.feature` is absent, so the
+// dependency below is written into the generated project's Cargo.toml instead
+// of selecting an espforge-drivers feature.
+//
+// `bme280` 0.5.1's `spi::BME280::new(spi)` returns a `Result` (it reads the
+// chip id and calibration), so the constructor stays fallible. `init(&mut
+// delay)` applies the oversampling configuration; the fixture calls it from
+// `setup` before the first `measure`. Pressure comes back in pascals.
 driver "bme280_spi" {
     format_version 2
     summary "Bosch BME280 temperature, humidity and pressure sensor on SPI"
-    description "Reads the eight data bytes at 0xF7 in SPI mode: the address with bit 7 set, one dummy byte, then pressure, temperature and humidity. The constructor checks ID (0xD0) for 0x60, reads the calibration block and puts the chip in normal mode. The Rust half is the `bme280-spi-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    description "Reads temperature, pressure and relative humidity from a BME280 over an SPI bus. The crate's `new()` checks the chip id, `init()` reads the calibration block and configures 2x temperature oversampling, 16x pressure oversampling and the IIR filter; `measure()` then reads the eight data bytes at 0xF7 (address with bit 7 set, one dummy byte) and applies the compensation. The Rust half is the published `bme280` crate, so this manifest is the whole driver."
     category "sensor"
 
-    dependency "bme280-spi-driver" {
-        path "../bme280-spi-driver"
-    }
+    dependency "bme280" { version "0.5.1" }
 
     bus "spi" {
         mode 0
@@ -19,8 +21,8 @@ driver "bme280_spi" {
 
     codegen {
         runtime "blocking" {
-            type "bme280_spi_driver::Bme280Spi<espforge_runtime::ConfiguredSpiDevice>"
-            constructor "bme280_spi_driver::Bme280Spi::new({bus_device})"
+            type "bme280::spi::BME280<espforge_runtime::ConfiguredSpiDevice>"
+            constructor "bme280::spi::BME280::new({bus_device})"
             endpoint "espforge_runtime::ConfiguredSpiDevice"
         }
     }
@@ -30,6 +32,6 @@ driver "bme280_spi" {
         help "`boot` builds the sensor during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
     }
 
-    example "minimal" #"<bme280_spi id="climate" bus="$spi2" cs="7" />"#
+    example "minimal" #"<bme280_spi id=\"climate\" bus=\"$spi2\" cs=\"7\" />"#
     see_also "peripherals/spi"
 }

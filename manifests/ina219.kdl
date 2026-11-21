@@ -1,7 +1,9 @@
 // The external `<ina219>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// espforge-drivers. It is not manifest only yet: the published `ina219` 0.2.1
+// crate takes its own `ina219::address::Address`, so the protocol stays in the
+// `ina219-driver` crate beside this manifest. The `dependency` block points
+// the generated project at that crate; no `espforge-drivers` feature is
+// involved.
 driver "ina219" {
     format_version 2
     summary "TI INA219 current and power monitor on I2C"

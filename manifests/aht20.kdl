@@ -1,7 +1,9 @@
 // The external `<aht20>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// espforge-drivers. It is not manifest only yet: the published `aht20-driver`
+// crate's `new` returns an uninitialised value that `init(&mut delay)` turns
+// into `AHT20Initialized`, so the protocol stays in the `aht20-driver` crate
+// beside this manifest. The `dependency` block points the generated project at
+// that crate; no `espforge-drivers` feature is involved.
 driver "aht20" {
     format_version 2
     summary "ASAIR AHT20 temperature and relative humidity sensor on I2C"

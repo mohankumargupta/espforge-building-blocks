@@ -4,16 +4,15 @@
     "sgp30": {
       "kind": "local",
       "source": "./drivers/sgp30.kdl",
-      "manifest_sha256": "58423aba80bb4c50a91edc91ae3de659325f04a6d988d078fe838ced54695306",
+      "manifest_sha256": "7274a9ee412c9dfdb3fe58f18ca4b55489e1bc9507cfe96cd59c8db4977bbea6",
       "dependencies": [
         {
-          "package": "sgp30-driver",
-          "path": "../sgp30-driver"
+          "package": "sgp30"
         }
       ],
       "crate": {
-        "package": "sgp30-driver",
-        "path": "../sgp30-driver"
+        "package": "sgp30",
+        "version": "1.0.0"
       }
     }
   }
