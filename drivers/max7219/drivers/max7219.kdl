@@ -2,35 +2,37 @@
 // espforge-drivers. `codegen.feature` is absent, so the dependency below is
 // written into the generated project's Cargo.toml instead of selecting an
 // espforge-drivers feature. Manifest only: the type and constructor come
-// straight from the `max7219-display` crate, so there is no Rust half beside
-// this file.
+// straight from the `max7219` crate, so there is no Rust half beside this file.
+//
+// `bus "none"`: the chip's interface is three GPIO lines the driver toggles
+// itself, not a hardware SPI peripheral. The constructor therefore takes the
+// pins, and the fixed display count comes first.
 driver "max7219" {
     format_version 2
     summary "Maxim MAX7219/MAX7221 8-digit 7-segment and 8x8 LED matrix driver"
-    description "Writes the MAX7219's sixteen-bit words over SPI: an 8-bit register address followed by an 8-bit value, latched when CS is released. `max7219-display` 0.1.5's `Max7219::new(spi)` takes an `embedded-hal` 1.0 `SpiDevice` and drives CS itself, so no separate load pin is declared. `new` is infallible, so `fallible #false`; the app calls `init()` once for the crate's setup sequence and then `power_on()`. This manifest declares one display and no MISO: the chip never answers. `write_raw_digit`, `set_intensity`, `clear_display` and `power_on/off` are on the built type."
+    description "Bit-bangs the MAX7219's three-wire interface: CS goes low, sixteen bits (an 8-bit register address then an 8-bit value) are shifted out MSB first with DATA changing before each SCK rising edge, and CS rises to latch the word. `max7219` 0.5.0's `MAX7219::from_pins(1, data, cs, sck)` builds the driver from three `embedded-hal` 1.0 `OutputPin`s, so the manifest declares no bus and no MISO. It returns a `Result`, hence `fallible #true`. CS must idle high and SCK low; DATA is set before the clock. One display is declared. `power_on`, `set_intensity`, `clear_display`, `set_decode_mode`, `write_raw`, `write_raw_byte` and `test` are on the built type."
     category "display"
 
-    dependency "max7219-display" { version "0.1.5" }
+    dependency "max7219" { version "0.5.0" }
 
-    bus "spi" {
-        mode 0
-        frequency "1000kHz"
-    }
+    bus "none"
+
+    pin "data" direction="output" default_level="low"
+    pin "cs" direction="output" default_level="high"
+    pin "sck" direction="output" default_level="low"
 
     codegen {
-        fallible #false
+        fallible #true
         runtime "blocking" {
-            type "max7219_display::driver::Max7219<espforge_runtime::ConfiguredSpiDevice>"
-            constructor "max7219_display::driver::Max7219::new({bus_device})"
-            endpoint "espforge_runtime::ConfiguredSpiDevice"
+            type "max7219::MAX7219<max7219::connectors::PinConnector<espforge_runtime::OutputPin, espforge_runtime::OutputPin, espforge_runtime::OutputPin>>"
+            constructor "max7219::MAX7219::from_pins(1, {data}, {cs}, {sck})"
         }
     }
 
     attr "init" kind="choice" default="boot" {
         choices "boot" "deferred"
-        help "`boot` builds the display during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+        help "`boot` claims the lines and builds the display during `Devices::new`; `deferred` stores the raw pins and constructs it in `init()`."
     }
 
-    example "minimal" #"<max7219 id=\"matrix\" bus=\"$spi2\" cs=\"7\" />"#
-    see_also "peripherals/spi"
+    example "minimal" #"<max7219 id=\"matrix\" data=\"3\" cs=\"7\" sck=\"6\" />"#
 }

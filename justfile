@@ -3635,8 +3635,8 @@ max7219-part:
 max7219-check:
     just check {{ max7219_rel }}
 
-# Compile the generated project: the manifest's type, constructor and endpoint,
-# and the crates.io dependency in the generated Cargo.toml.
+# Compile the generated project: the busless manifest's type and pin
+# constructor, and the crates.io dependency in the generated Cargo.toml.
 max7219-image:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -3699,7 +3699,7 @@ max7219-sensor: max7219-image max7219-part
         return 1
     }
     wait_for "TEST: max7219 boot" "firmware boots" 40
-    wait_for_log "is the SPI device on chip select GPIO 7" "the part attached on the firmware's CS" 10
+    wait_for_log "part matrix (max7219) attached" "the part attached on the firmware's pins" 10
     wait_for "TEST: max7219 frame=aaaaaaaaaaaaaaaa" "a frame was written to the digits" 20
     state=$(just max7219-part-input "part matrix state")
     echo "$state"
@@ -3712,6 +3712,114 @@ max7219-sensor: max7219-image max7219-part
 # Remove the disposable images; the fixture and the checked-in wasm stay.
 max7219-clean:
     rm -rf {{ max7219_out }} {{ max7219_part_dir }}/target
+
+
+# ---- 74HC595 virtual part fixture (drivers/nxp74hc595) -------------------
+
+nxp74hc595_rel := "drivers/nxp74hc595"
+nxp74hc595_dir := justfile_directory() / nxp74hc595_rel
+nxp74hc595_out := build_dir / "nxp74hc595"
+nxp74hc595_port := "127.0.0.1:5593"
+nxp74hc595_part_dir := nxp74hc595_dir / "parts" / "nxp74hc595"
+nxp74hc595_part_wasm := nxp74hc595_dir / "parts" / "nxp74hc595.wasm"
+
+# The part's own tests: the shift register, the latch and the state, on the host.
+nxp74hc595-part-test:
+    cargo test --manifest-path {{ nxp74hc595_part_dir }}/Cargo.toml
+
+# Build the virtual 74HC595 -> drivers/nxp74hc595/parts/nxp74hc595.wasm.
+nxp74hc595-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ nxp74hc595_part_dir }}/Cargo.toml"
+    cp "{{ nxp74hc595_part_dir }}/target/wasm32-unknown-unknown/release/nxp74hc595.wasm" \
+        "{{ nxp74hc595_part_wasm }}"
+    ls -l "{{ nxp74hc595_part_wasm }}"
+
+# Schema, resource graph, manifest discovery and the crate dependency.
+nxp74hc595-check:
+    just check {{ nxp74hc595_rel }}
+
+# Compile the generated project: the busless manifest's type and pin
+# constructor, and the crates.io dependency in the generated Cargo.toml.
+nxp74hc595-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ nxp74hc595_out }}"
+    just check "{{ nxp74hc595_rel }}"
+    just build "{{ nxp74hc595_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ nxp74hc595_out }}/nxp74hc595.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/nxp74hc595_test" \
+        "{{ nxp74hc595_out }}/nxp74hc595.elf"
+    ls -l "{{ nxp74hc595_out }}/nxp74hc595.bin" "{{ nxp74hc595_out }}/nxp74hc595.elf"
+
+# Run the firmware with the virtual register on the control channel.
+nxp74hc595-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ nxp74hc595_out }}/nxp74hc595.bin --cosim-board {{ nxp74hc595_dir }}/board.json --control-tcp {{ nxp74hc595_port }} --elf {{ nxp74hc595_out }}/nxp74hc595.elf --timeout {{ timeout }} --log-file {{ nxp74hc595_out }}/emu.log"
+
+# One control line, e.g. "part shift state".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+nxp74hc595-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ nxp74hc595_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing
+# drivers/nxp74hc595/drivers/nxp74hc595.kdl.
+nxp74hc595-driver-record:
+    just espforge "driver {{ nxp74hc595_rel }} add --local {{ nxp74hc595_rel }}/drivers/nxp74hc595.kdl"
+
+# Happy path: boot, attach, the startup pattern, the steady frame and the latch.
+nxp74hc595-sensor: nxp74hc595-image nxp74hc595-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ nxp74hc595_out }}/sensor.stdout"
+    log="{{ nxp74hc595_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just nxp74hc595-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: nxp74hc595 boot" "firmware boots" 40
+    wait_for_log "part shift (nxp74hc595) attached" "the part attached on the firmware's pins" 10
+    wait_for "TEST: nxp74hc595 load=5a" "the startup pattern was loaded" 20
+    wait_for "TEST: nxp74hc595 load=aa" "the steady frame was loaded" 20
+    state=$(just nxp74hc595-part-input "part shift state")
+    echo "$state"
+    for want in "latch=aa" "shift=aa" "output=enabled"; do
+        [[ "$state" == *"$want"* ]] || { echo "FAIL: the part did not show '$want'; got: $state" >&2; exit 1; }
+    done
+    echo "PASS: the part latched the byte and enabled its outputs"
+    echo "nxp74hc595-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+nxp74hc595-clean:
+    rm -rf {{ nxp74hc595_out }} {{ nxp74hc595_part_dir }}/target
 
 
 # ---- examples/001-wifi-basic (networking basics) -------------------------

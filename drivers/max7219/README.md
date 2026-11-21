@@ -1,27 +1,29 @@
-# MAX7219 with a project-local, manifest-only driver
+# MAX7219 with a project-local, busless, manifest-only driver
 
 An espforge project whose `<max7219>` driver is **external** to
 `espforge-drivers`: the wiring lives in `drivers/max7219.kdl`, a project-local
-manifest, and there is no Rust half at all. The manifest names the published
-`max7219-display` crate, whose `Max7219::new(spi)` already fits espforge's type
-and constructor slots. It runs against the virtual MAX7219 part in
-`parts/max7219/`, so the same firmware writes a frame the part latches with no
-display code glued in by hand.
+manifest, and there is no Rust half at all. The manifest uses `bus "none"`:
+the chip's three-wire interface is bit-banged on GPIO lines, so the project
+builds no SPI peripheral. It names the published `max7219` 0.5.0 crate, whose
+`MAX7219::from_pins(1, data, cs, sck)` already fits espforge's busless type and
+constructor slots. It runs against the virtual MAX7219 part in
+`parts/max7219/`, which decodes the pin edges and latches the same frame the
+firmware writes.
 
 Everything goes through the root `justfile`, per `AGENTS.md`. The firmware is
 ESP32-C3 only. `max7219` is in `spi.tsv` and had no fixture here or in
-`espforge-drivers`. Only the main happy path is implemented: initialize the
-chip, power it on, set the intensity, and write the same frame to all eight
-digits once a second.
+`espforge-drivers`. Only the main happy path is implemented: configure the
+chip, clear the digits, set the intensity, power it on, and write the same
+frame to all eight digits once a second.
 
 ## What is here
 
 | File | What it is |
 |---|---|
-| `max7219-test.espf.txt` | the espforge project: write-only SPI2 on SCK 6 / MOSI 3, `<max7219 id="matrix" bus="$spi2" cs="7" />` |
-| `src/app.rs` | calls `init()`, powers on, sets intensity 0x0F, writes `AA` to the eight digits a second, logs `TEST:` lines |
-| `drivers/max7219.kdl` | **the external driver**: `dependency "max7219-display" { version "0.1.5" }`, no `codegen.feature`, no driver crate |
-| `board.json` | wires the part's `CS` to GPIO 7, `SCK` to 6, `MOSI` to 3 |
+| `max7219-test.espf.txt` | the espforge project: no peripherals, `<max7219 id="matrix" data="3" cs="7" sck="6" />` |
+| `src/app.rs` | sets decode mode, clears the digits, enables all eight, sets intensity 0x0F, powers on, writes `AA` to the eight digits a second, logs `TEST:` lines |
+| `drivers/max7219.kdl` | **the external driver**: `dependency "max7219" { version "0.5.0" }`, `bus "none"`, three output pins, no `codegen.feature`, no driver crate |
+| `board.json` | wires the part's `DATA` to GPIO 3, `CS` to 7, `SCK` to 6 |
 | `parts/max7219/` | the virtual display's source (`Cargo.toml`, `src/lib.rs`) |
 | `parts/max7219.wasm` | the built virtual display, from `just max7219-part` |
 | `.espforge/drivers.lock` | written by the first `check`/`build`; re-record with `just max7219-driver-record` |
@@ -37,15 +39,18 @@ so it is versioned with the fixture. Its `esp-part` dependency points into
 ## Why there is no driver crate
 
 Manifest-only needs a published crate whose constructor already fits the
-manifest's slots. `max7219-display` 0.1.5's `Max7219::new(spi)` is the whole
-constructor: it takes an `embedded-hal` 1.0 `SpiDevice`, which is espforge's
-`ConfiguredSpiDevice`, and returns the driver without a `Result` (hence
-`fallible #false`). The `SpiDevice` transaction is also what drives CS, so the
-manifest declares no separate load pin.
+manifest's slots. `max7219` 0.5.0's `MAX7219::from_pins(displays, data, cs, sck)`
+takes the fixed display count first and then the three GPIOs, and returns a
+`Result` (hence `fallible #true`). `bus "none"` means espforge binds no
+peripheral and leaves every constructor argument in place, so the fixed `1`
+does not have to be a bus handle. The generated type is
+`MAX7219<PinConnector<OutputPin, OutputPin, OutputPin>>`; the crate uses
+embedded-hal 1.0 like the runtime.
 
-The first MAX7219 crate checked, `max7219` 0.5.0, could not be used: its
-`from_spi(displays, spi)` takes the bus second, and a manifest constructor must
-take `{bus_device}` first.
+The same crate's hardware-SPI constructor, `from_spi(displays, spi)`, could not
+be used on a bus driver: espforge requires `{bus_device}` to be the first
+argument, and this constructor takes it second. That is not a problem for the
+busless shape, which has no bus argument at all.
 
 ## Try it in one command
 
@@ -57,7 +62,7 @@ Builds the firmware and the virtual part, boots the emulator, and prints:
 
 ```text
 PASS: firmware boots
-PASS: the part attached on the firmware's CS
+PASS: the part attached on the firmware's pins
 PASS: a frame was written to the digits
 ok decode=00 digits=aaaaaaaaaaaaaaaa intensity=0f power=on scan=7 test=off
 PASS: the part latched the frame and the driver's control registers
@@ -93,29 +98,30 @@ the manifest text is pinned.
 
 ## Reading the wire
 
-The chip is write-only. One transaction asserts CS, clocks two bytes — the
-register address then its value — and releases CS, which latches the word.
-There is no MISO, so `<spi>` omits it and the runtime builds a write-only bus.
-The generated `ConfiguredSpiDevice` drives CS as a plain GPIO output around each
-transaction, which is the path this board exercises.
+The chip is write-only, so the manifest declares no MISO and no `<spi>`
+peripheral. `MAX7219::from_pins` builds a `PinConnector` that drives the lines
+itself:
 
-`Max7219::new` only stores the bus. `init()` in `setup` sends the setup
-sequence:
+1. CS goes low.
+2. For each of the sixteen bits, MSB first: DATA is set to the bit, then SCK
+   rises (the chip samples), then SCK falls.
+3. CS rises, latching the word.
+
+`setup` puts the chip in the state the recipe expects:
 
 | Word | Meaning |
 |---|---|
-| `0C 01` | power on |
-| `0F 00` | display test off |
-| `0B 07` | scan limit: all eight digits |
 | `09 00` | decode mode off (raw segment/row bytes) |
 | `01 00` … `08 00` | clear the eight digits |
+| `0B 07` | scan limit: all eight digits |
+| `0A 0F` | maximum intensity |
+| `0C 01` | power on |
 
-`setup` then repeats `0C 01` (the app's own `power_on()`) and writes `0A 0F`
-(maximum intensity). Once a second `forever` sends `01 AA` … `08 AA`: one
-two-byte transfer per digit, so the frame is `AA` on every row.
+Once a second `forever` sends `01 AA` … `08 AA`: one sixteen-bit word per
+digit, so the frame is `AA` on every row.
 
 The part shows the latched register file, which is how the recipe proves the
-bytes arrived:
+pin edges carried the bytes:
 
 ```text
 ok decode=00 digits=aaaaaaaaaaaaaaaa intensity=0f power=on scan=7 test=off
@@ -125,27 +131,27 @@ The attach line is in `build/max7219/emu.log` (the firmware console is
 `build/max7219/sensor.stdout`):
 
 ```text
-co-simulation: part matrix (max7219) attached: wired CS=GPIO7 MOSI=GPIO3 SCK=GPIO6; drives no pin; is the SPI device on chip select GPIO 7
+co-simulation: part matrix (max7219) attached: wired CS=GPIO7 DATA=GPIO3 SCK=GPIO6; drives no pin
 ```
 
 ## Limits
 
-- One display: the crate defaults to a device count of 1, and the manifest's
-  constructor does not call `with_device_count`. The crate itself supports up
+- One display: the constructor's first argument is `1`. The crate supports up
   to eight chained displays; the part models one.
+- Bit-banged, not hardware SPI: the driver claims three GPIOs and toggles them
+  in software. The emulator models the logic levels, not electrical setup/hold
+  times or a maximum clock rate.
 - Write-only: no reads and no read-back from the chip. The part models the
   latch and register file, not LEDs, segment current, multiplexing or
   brightness beyond storing the intensity byte.
-- Only the last sixteen bits of a transfer latch, as with one display on real
-  hardware; earlier words are shifted through.
-- `init()` is explicit in `setup`: `Devices::new` only builds the driver. A
-  failed init logs an error and the app keeps running, because the manifest's
-  constructor is infallible.
-- SPI mode 0 at 1 MHz is declared; the chip's 10 MHz limit and the emulator's
-  lack of polarity/phase modelling are not exercised.
+- Only the last sixteen bits of one CS assertion latch, as with one display on
+  real hardware; earlier words are shifted through, and a short pulse latches
+  nothing.
+- The crate's constructor returns a `Result`; a failed construction is reported
+  by `Devices::new` as a device init error.
 - Blocking only: no async variant, and `init="deferred"` is offered by the
   manifest but not exercised.
-- Happy path only: no negative boards and no missing-CS case.
+- Happy path only: no negative boards and no missing-pin case.
 
 ## Cleanup
 

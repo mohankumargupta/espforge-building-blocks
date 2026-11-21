@@ -1,0 +1,3 @@
+{ "parts": {
+    "shift": { "module": "parts/nxp74hc595.wasm", "pins": { "OE": 4, "SER": 3, "SRCLR": 5, "SRCLK": 6, "RCLK": 7 } }
+} }

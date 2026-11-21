@@ -3,16 +3,16 @@
   "drivers": {
     "max7219": {
       "kind": "local",
-      "source": "./drivers/max7219.kdl",
-      "manifest_sha256": "57227abd5894d9b84188a15ddb30f941c7f345b6cdf0bfd457c96992b19f04c9",
+      "source": "drivers/max7219/drivers/max7219.kdl",
+      "manifest_sha256": "cfcd02a5f5b575661a6289e5320b1d0a9c5839579b08c14d7d7c9c9bad37fecb",
       "dependencies": [
         {
-          "package": "max7219-display"
+          "package": "max7219"
         }
       ],
       "crate": {
-        "package": "max7219-display",
-        "version": "0.1.5"
+        "package": "max7219",
+        "version": "0.5.0"
       }
     }
   }

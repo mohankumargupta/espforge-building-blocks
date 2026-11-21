@@ -1,0 +1,21 @@
+====================
+74HC595 test firmware
+
+Fixture for drivers/nxp74hc595: the project-local, busless `<nxp74hc595>`
+driver, wired to the virtual 74HC595 part (OE = GPIO 4, SER = GPIO 3,
+SRCLR = GPIO 5, SRCLK = GPIO 6, RCLK = GPIO 7). The manifest's `bus "none"`
+means the crate bit-bangs the five lines; this project builds no SPI
+peripheral. Prints `TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="nxp74hc595_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+
+# devices
+  <nxp74hc595 id="shift" oe="4" ser="3" srclr="5" srclk="6" rclk="7" />
+
+# services

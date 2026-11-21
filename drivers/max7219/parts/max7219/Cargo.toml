@@ -1,6 +1,6 @@
-# A virtual part: a Maxim MAX7219 LED display driver on write-only SPI,
-# compiled to a WebAssembly module the emulator loads. README.md in the
-# fixture folder says what it models.
+# A virtual part: a Maxim MAX7219 LED display driver bit-banged on three
+# GPIO lines, compiled to a WebAssembly module the emulator loads. README.md
+# in the fixture folder says what it models.
 #
 # Its own workspace, so it builds on its own and nothing here enters esp-emu's
 # dependency graph. `esp-part` comes from the vendored esp-emulator checkout,

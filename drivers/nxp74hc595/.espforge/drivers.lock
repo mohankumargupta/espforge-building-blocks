@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "drivers": {
+    "nxp74hc595": {
+      "kind": "local",
+      "source": "drivers/nxp74hc595/drivers/nxp74hc595.kdl",
+      "manifest_sha256": "60edd3927b5e1a66c62eb10e9a488ec29066a0fcf7567e89467a55796d1b0266",
+      "dependencies": [
+        {
+          "package": "drive_74hc595"
+        }
+      ],
+      "crate": {
+        "package": "drive_74hc595",
+        "version": "0.2.0"
+      }
+    }
+  }
+}

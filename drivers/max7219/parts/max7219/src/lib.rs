@@ -1,23 +1,24 @@
 //! A Maxim MAX7219 LED display driver, written as a virtual part.
 //!
-//! The chip is write-only: CS is asserted, sixteen bits are clocked in — an
-//! 8-bit register address then an 8-bit value — and CS is released, latching
-//! the word. Nothing comes back on MISO. `Max7219` keeps that register file
-//! and shows it through `part_state`, so a test can read what the firmware
-//! wrote; README.md lists what is left out.
+//! The chip is write-only and busless: the firmware drives CS low, shifts
+//! sixteen bits (an 8-bit register address then an 8-bit value) out on DATA,
+//! clocking each on a rising SCK edge, and raises CS to latch the word.
+//! `Max7219` watches those three lines, keeps the register file and shows it
+//! through `part_state`, so a test can read what the firmware wrote;
+//! README.md lists what is left out.
 //!
 //! `Max7219` is the device and knows nothing about WebAssembly. The
 //! `export_part!` line at the end makes it a part: the `esp-part` crate
-//! exports every function of `proto/PART_ABI.md`, `part_on_bus` included.
+//! exports every function of `proto/PART_ABI.md`, `part_on_pins` included.
 
 use esp_part::prelude::*;
 
 /// The chip's own pin names. The board says which chip pins they are wired
-/// to, as `{ pins: { CS: 7, SCK: 6, MOSI: 3 } }`. DIN is the crate's `MOSI`,
-/// and there is no MISO because the chip never drives one.
+/// to, as `{ pins: { DATA: 3, CS: 7, SCK: 6 } }`. There is no MISO because the
+/// chip never drives one.
+const DATA: &str = "DATA";
 const CS: &str = "CS";
 const SCK: &str = "SCK";
-const MOSI: &str = "MOSI";
 
 /// The eight digit registers: one 8x8 row, or one 7-segment digit, each.
 const DIGITS: usize = 8;
@@ -35,9 +36,15 @@ const REGISTERS: usize = 16;
 struct Max7219 {
     /// The chip pins the part's own pins are wired to. `None` until the board
     /// says, or when it left the pin unconnected.
+    data: Option<u32>,
     cs: Option<u32>,
     sck: Option<u32>,
-    mosi: Option<u32>,
+    /// The levels of the previous `on_pins` call, so only transitions act.
+    last_levels: Option<u64>,
+    /// The bits clocked since CS fell, and how many. One display latches the
+    /// last sixteen.
+    shift: u16,
+    bits: u8,
     /// The register file, at the power-on defaults: every digit clear, decode
     /// and intensity off, scan limit 0, shutdown mode on, test mode off.
     regs: [u8; REGISTERS],
@@ -46,9 +53,12 @@ struct Max7219 {
 impl Default for Max7219 {
     fn default() -> Self {
         Self {
+            data: None,
             cs: None,
             sck: None,
-            mosi: None,
+            last_levels: None,
+            shift: 0,
+            bits: 0,
             regs: [0u8; REGISTERS],
         }
     }
@@ -56,55 +66,58 @@ impl Default for Max7219 {
 
 impl Device for Max7219 {
     const NAME: &'static str = "max7219";
-    const ON_BUS: bool = true;
 
     /// Where the board wired the part.
     fn configure(&mut self, config: &PartConfig) {
+        self.data = config.pins.get(DATA).copied();
         self.cs = config.pins.get(CS).copied();
         self.sck = config.pins.get(SCK).copied();
-        self.mosi = config.pins.get(MOSI).copied();
     }
 
-    /// The chip select this part is selected by, plus the clock and data pads.
-    /// espforge drives CS as a plain GPIO, so the pad carries no controller
-    /// chip select; the emulator takes the bus from whichever of `SCK` and
-    /// `MOSI` the firmware put a bus line on. There is no MISO pin.
+    /// The three lines the firmware drives. The part only watches them; it
+    /// never drives a line back, so it has no exclusive claim.
     fn claims(&self) -> Vec<Claim> {
-        let spi = SpiClaim {
-            cs_pin: self.cs,
-            clk_pin: self.sck,
-            mosi_pin: self.mosi,
-            ..Default::default()
-        };
-        vec![Claim {
-            what: Some(claim::What::Spi(spi)),
-        }]
+        let mut mask: u64 = 0;
+        for pin in [self.data, self.cs, self.sck].into_iter().flatten() {
+            mask |= 1 << pin;
+        }
+        if mask == 0 {
+            Vec::new()
+        } else {
+            vec![watches(mask)]
+        }
     }
 
-    /// The guest's SPI transfer. One transfer is one CS assertion, and the
-    /// chip latches the last sixteen bits clocked before CS rises, whatever
-    /// the byte alignment; earlier words are shifted through.
-    fn on_bus(&mut self, request: &BusRequest) -> Option<BusReply> {
-        let Some(bus_request::Op::Spi(spi)) = &request.op else {
-            return None;
+    /// Decode the bit-banged transfer from pin edges:
+    ///
+    /// - CS falling starts a word and clears the shift register;
+    /// - a rising SCK edge while CS is low samples DATA, MSB first;
+    /// - CS rising latches the last sixteen bits, if a whole word arrived.
+    ///
+    /// The chip has no MISO, so there is nothing to drive and no bus reply.
+    fn on_pins(&mut self, levels: u64, _now_ns: u64) {
+        let (Some(data), Some(cs), Some(sck)) = (self.data, self.cs, self.sck) else {
+            self.last_levels = Some(levels);
+            return;
         };
-        if spi.tx.len() >= 2 {
-            let end = spi.tx.len();
-            self.write_word(spi.tx[end - 2], spi.tx[end - 1]);
+        let Some(previous) = self.last_levels.replace(levels) else {
+            return;
+        };
+
+        let cs_low = bit(levels, cs) == 0;
+        let was_low = bit(previous, cs) == 0;
+        if cs_low && !was_low {
+            self.shift = 0;
+            self.bits = 0;
         }
-        // The chip never drives MISO, but the controller can still clock a
-        // transfer with bytes read back (a write on esp-hal's path does).
-        // Answer it as an undriven line: `ack = false` means the master reads
-        // 0xFF, as it would from a chip with no MISO pin.
-        if spi.rx_len > 0 {
-            return Some(BusReply {
-                correlation_id: request.correlation_id,
-                ack: false,
-                data: Vec::new(),
-                op: BusOp::Spi as i32,
-            });
+        if cs_low && bit(levels, sck) == 1 && bit(previous, sck) == 0 {
+            self.shift = (self.shift << 1) | bit(levels, data) as u16;
+            self.bits = self.bits.saturating_add(1);
         }
-        None
+        if !cs_low && was_low && self.bits >= 16 {
+            let word = self.shift;
+            self.write_word((word >> 8) as u8, word as u8);
+        }
     }
 
     /// What the register file holds, in the part's own words: the eight digit
@@ -149,8 +162,12 @@ impl Max7219 {
     }
 }
 
-// Big enough for the driver's longest write — two bytes per word — and for
-// the write a host hands over with it.
+/// One bit of `levels`, bit N for GPIO N.
+fn bit(levels: u64, pin: u32) -> u64 {
+    (levels >> pin) & 1
+}
+
+// Big enough for the longest state line and for the labels a host sends.
 esp_part::export_part!(Max7219, buffer = 512);
 
 // The device runs on the host too, so `cargo test` checks it without an
@@ -159,14 +176,17 @@ esp_part::export_part!(Max7219, buffer = 512);
 mod tests {
     use super::*;
 
-    /// Wired as README.md's board wires it: CS on GPIO 7, SCK on 6, MOSI on
-    /// 3.
+    /// Wired as README.md's board wires it: DATA on GPIO 3, CS on 7, SCK on 6.
+    const DATA_PIN: u32 = 3;
+    const CS_PIN: u32 = 7;
+    const SCK_PIN: u32 = 6;
+
     fn chip() -> Max7219 {
         let mut chip = Max7219::default();
         let pins = [
-            (CS.to_string(), 7),
-            (SCK.to_string(), 6),
-            (MOSI.to_string(), 3),
+            (DATA.to_string(), DATA_PIN),
+            (CS.to_string(), CS_PIN),
+            (SCK.to_string(), SCK_PIN),
         ]
         .into();
         chip.configure(&PartConfig {
@@ -176,19 +196,52 @@ mod tests {
         chip
     }
 
-    /// One CS assertion carrying `tx`; a write reads nothing.
-    fn write(chip: &mut Max7219, tx: &[u8]) {
-        let spi = SpiTransfer {
-            bus: 2,
-            tx: tx.to_vec(),
-            rx_len: 0,
-            ..Default::default()
-        };
-        let request = BusRequest {
-            correlation_id: 7,
-            op: Some(bus_request::Op::Spi(spi)),
-        };
-        assert_eq!(chip.on_bus(&request), None, "a write is never answered");
+    /// The idle line: CS high, SCK and DATA low.
+    fn idle() -> u64 {
+        1 << CS_PIN
+    }
+
+    /// The three watched lines at the wanted levels.
+    fn levels(cs_low: bool, sck_high: bool, data_high: bool) -> u64 {
+        (if cs_low { 0 } else { 1 << CS_PIN })
+            | (if sck_high { 1 << SCK_PIN } else { 0 })
+            | (if data_high { 1 << DATA_PIN } else { 0 })
+    }
+
+    /// One CS assertion containing `word`, MSB first: set DATA, raise SCK to
+    /// sample it, lower SCK again.
+    fn clock_word(chip: &mut Max7219, now: &mut u64, word: u16) {
+        for shift in (0..16).rev() {
+            let high = (word >> shift) & 1 == 1;
+            chip.on_pins(levels(true, false, high), *now);
+            *now += 1;
+            chip.on_pins(levels(true, true, high), *now);
+            *now += 1;
+            chip.on_pins(levels(true, false, high), *now);
+            *now += 1;
+        }
+    }
+
+    /// Start with an idle frame so the transitions below are edges.
+    fn begin(chip: &mut Max7219, now: &mut u64) {
+        chip.on_pins(idle(), *now);
+        *now += 1;
+        chip.on_pins(levels(true, false, false), *now);
+        *now += 1;
+    }
+
+    /// Release CS: the chip latches what it shifted in.
+    fn end(chip: &mut Max7219, now: &mut u64) {
+        chip.on_pins(idle(), *now);
+        *now += 1;
+    }
+
+    /// One complete word in its own CS assertion.
+    fn write(chip: &mut Max7219, header: u8, data: u8) {
+        let mut now = 0;
+        begin(chip, &mut now);
+        clock_word(chip, &mut now, (header as u16) << 8 | data as u16);
+        end(chip, &mut now);
     }
 
     #[test]
@@ -217,8 +270,8 @@ mod tests {
     #[test]
     fn a_word_latches_the_register_it_names() {
         let mut chip = chip();
-        write(&mut chip, &[0x0A, 0x0F]);
-        write(&mut chip, &[0x0C, 0x01]);
+        write(&mut chip, 0x0A, 0x0F);
+        write(&mut chip, 0x0C, 0x01);
         let shown = chip.state().unwrap();
         assert_eq!(shown.get("intensity"), Some("0f"));
         assert_eq!(shown.get("power"), Some("on"));
@@ -228,7 +281,7 @@ mod tests {
     fn the_eight_digit_registers_are_the_frame() {
         let mut chip = chip();
         for (digit, value) in (1u8..=8).zip([0x7E, 0x30, 0x6D, 0x79, 0x33, 0x5B, 0x5F, 0x7F]) {
-            write(&mut chip, &[digit, value]);
+            write(&mut chip, digit, value);
         }
         assert_eq!(
             chip.state().unwrap().get("digits"),
@@ -237,11 +290,15 @@ mod tests {
     }
 
     #[test]
-    fn only_the_last_word_of_a_transfer_latches() {
+    fn only_the_last_word_before_cs_rises_latches() {
         // A chain shifts several words before CS rises; one display keeps the
         // last one.
         let mut chip = chip();
-        write(&mut chip, &[0x0A, 0x01, 0x0B, 0x07]);
+        let mut now = 0;
+        begin(&mut chip, &mut now);
+        clock_word(&mut chip, &mut now, 0x0A01);
+        clock_word(&mut chip, &mut now, 0x0B07);
+        end(&mut chip, &mut now);
         let shown = chip.state().unwrap();
         assert_eq!(shown.get("scan"), Some("7"));
         assert_eq!(
@@ -252,66 +309,41 @@ mod tests {
     }
 
     #[test]
-    fn the_last_sixteen_bits_latch_whatever_the_alignment() {
-        // Three bytes clocked before CS rises: the chip keeps `05 0B`, so
-        // digit 5 gets 0x0B and the intensity word was shifted through.
+    fn a_cs_pulse_with_no_full_word_latches_nothing() {
         let mut chip = chip();
-        write(&mut chip, &[0x0A, 0x05, 0x0B]);
-        let shown = chip.state().unwrap();
-        assert_eq!(shown.get("intensity"), Some("00"));
-        assert_eq!(shown.get("digits"), Some("000000000b000000"));
+        let mut now = 0;
+        begin(&mut chip, &mut now);
+        // Eight bits only: too short for an address and a value.
+        for shift in (0..8).rev() {
+            let high = (0x0Au16 >> shift) & 1 == 1;
+            chip.on_pins(levels(true, false, high), now);
+            now += 1;
+            chip.on_pins(levels(true, true, high), now);
+            now += 1;
+            chip.on_pins(levels(true, false, high), now);
+            now += 1;
+        }
+        end(&mut chip, &mut now);
+        assert_eq!(chip.state().unwrap().get("intensity"), Some("00"));
     }
 
     #[test]
     fn an_address_above_0f_is_ignored() {
         let mut chip = chip();
-        write(&mut chip, &[0x1A, 0x0F]);
+        write(&mut chip, 0x1A, 0x0F);
         assert_eq!(chip.state().unwrap().get("intensity"), Some("00"));
     }
 
     #[test]
-    fn a_transfer_that_reads_is_answered_as_an_undriven_line() {
-        // One MAX7219 has no MISO, but the controller can still clock a
-        // transfer with bytes read back; the part must answer it.
-        let mut chip = chip();
-        let spi = SpiTransfer {
-            bus: 2,
-            tx: vec![0x0A, 0x0F],
-            rx_len: 2,
-            ..Default::default()
-        };
-        let request = BusRequest {
-            correlation_id: 7,
-            op: Some(bus_request::Op::Spi(spi)),
-        };
-        let reply = chip.on_bus(&request).expect("a read is answered");
-        assert_eq!(
-            (reply.correlation_id, reply.ack, reply.data, reply.op),
-            (7, false, Vec::new(), BusOp::Spi as i32)
-        );
-        assert_eq!(chip.state().unwrap().get("intensity"), Some("0f"));
-    }
-
-    #[test]
-    fn it_claims_the_chip_select_and_both_bus_pads_but_no_miso() {
-        let spi = SpiClaim {
-            cs_pin: Some(7),
-            clk_pin: Some(6),
-            mosi_pin: Some(3),
-            ..Default::default()
-        };
-        assert_eq!(
-            chip().claims(),
-            [Claim {
-                what: Some(claim::What::Spi(spi))
-            }]
-        );
-        // Unwired: claimed without a chip select, which the handshake refuses.
-        assert_eq!(
-            Max7219::default().claims(),
-            [Claim {
-                what: Some(claim::What::Spi(SpiClaim::default()))
-            }]
+    fn it_watches_the_three_lines_and_drives_none() {
+        let mut mask: u64 = 0;
+        for pin in [DATA_PIN, CS_PIN, SCK_PIN] {
+            mask |= 1 << pin;
+        }
+        assert_eq!(chip().claims(), [watches(mask)]);
+        assert!(
+            Max7219::default().claims().is_empty(),
+            "an unwired part claims nothing"
         );
     }
 }
