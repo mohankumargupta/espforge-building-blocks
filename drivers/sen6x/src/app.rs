@@ -1,8 +1,9 @@
-//! Happy-path fixture for the project-local `<sen6x>` driver.
+//! Happy-path fixture for the `<sen6x>` driver.
 //!
 //! The driver itself is the generated `air` device: `Devices::new` builds
-//! `sen6x_driver::Sen6x`, which starts continuous measurement. This app then
-//! reads the nine measured values once a second and logs them:
+//! `sen6x::blocking::Sen6x` and the manifest's `then` step starts continuous
+//! measurement. This app then reads the nine measured values once a second
+//! and logs them:
 //!
 //! - `TEST: sen6x boot`
 //! - `TEST: sen6x pm1=8.0 pm2.5=12.5 pm4=15.0 pm10=20.0 ug/m3 t=22.50 c
@@ -21,18 +22,18 @@ pub fn setup(ctx: &mut Context) {
 }
 
 pub fn forever(ctx: &mut Context) {
-    match device!(ctx, air).read() {
+    match device!(ctx, air).get_sample() {
         Ok(reading) => ctx.logger.info(format_args!(
             "TEST: sen6x pm1={:.1} pm2.5={:.1} pm4={:.1} pm10={:.1} ug/m3 t={:.2} c rh={:.2} voc={:.1} nox={:.1} co2={} ppm",
-            reading.pm1_0_ug_m3,
-            reading.pm2_5_ug_m3,
-            reading.pm4_0_ug_m3,
-            reading.pm10_ug_m3,
-            reading.temperature_c,
-            reading.humidity_percent,
-            reading.voc_index,
-            reading.nox_index,
-            reading.co2_ppm
+            reading.pm1,
+            reading.pm2_5,
+            reading.pm4,
+            reading.pm10,
+            reading.temperature,
+            reading.humidity,
+            reading.voc,
+            reading.nox,
+            reading.co2
         )),
         Err(error) => ctx
             .logger

@@ -4,7 +4,7 @@
     "ccs811": {
       "kind": "local",
       "source": "./drivers/ccs811.kdl",
-      "manifest_sha256": "4ab958781dc0f0fdb5ee43a22f610dbe91d51dcd978a98b824aa7ee20d2a1b6b",
+      "manifest_sha256": "30e2db6b39f5a4b25d33c5249cbf6d8cf748c37d467889c164439bf81a4655e2",
       "dependencies": [
         {
           "package": "ccs811-driver",

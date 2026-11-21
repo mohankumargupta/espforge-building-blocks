@@ -1,7 +1,10 @@
 // The external `<ccs811>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// espforge-drivers. It is not manifest only yet: the published
+// `embedded-ccs811` 1.0.0 crate's `start_application()` is a trait method that
+// the generated code cannot bring into scope, so the protocol stays in the
+// `ccs811-driver` crate beside this manifest. The `dependency` block points
+// the generated project at that crate; no `espforge-drivers` feature is
+// involved.
 driver "ccs811" {
     format_version 2
     summary "AMS CCS811 eCO2 and TVOC air quality sensor on I2C"

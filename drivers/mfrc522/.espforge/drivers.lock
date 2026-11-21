@@ -4,16 +4,15 @@
     "mfrc522": {
       "kind": "local",
       "source": "./drivers/mfrc522.kdl",
-      "manifest_sha256": "1d3f01f1de120c1daee35db079767aa9b447d0bdd2ccd6b9080b443a9d425398",
+      "manifest_sha256": "76448db12d5893501b183b9472f295e71c4ba44d55ab2369d3e73c7fbe4350a7",
       "dependencies": [
         {
-          "package": "mfrc522-driver",
-          "path": "../mfrc522-driver"
+          "package": "mfrc522"
         }
       ],
       "crate": {
-        "package": "mfrc522-driver",
-        "path": "../mfrc522-driver"
+        "package": "mfrc522",
+        "version": "0.8.0"
       }
     }
   }

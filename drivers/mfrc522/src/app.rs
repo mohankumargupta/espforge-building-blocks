@@ -1,13 +1,12 @@
-//! Happy-path fixture for the project-local `<mfrc522>` driver
-//! (planmfrc522.md).
+//! Happy-path fixture for the `<mfrc522>` driver (planmfrc522.md).
 //!
 //! The driver itself is the generated `reader` device: `Devices::new` builds
-//! `mfrc522_driver::Mfrc522`, which soft-resets the reader, checks
-//! `VersionReg` for 0x92 or 0x91 and switches the antenna on. This app only
-//! adds machine-checkable output:
+//! `mfrc522::Mfrc522` and the manifest's `then` step runs `init()`, which
+//! soft-resets the reader, checks `VersionReg` for 0x92 or 0x91 and switches
+//! the antenna on. This app only adds machine-checkable output:
 //!
 //! - `TEST: mfrc522 boot`
-//! - `TEST: tag uid=deadbeef sak=0x08 atqa=0x0004` once a second
+//! - `TEST: tag uid=deadbeef` once a second
 //! - `TEST: tag none` while no card is in the field
 //!
 //! Pins match `drivers/mfrc522/board.json` (CS 7, SCK 6, MOSI 3, MISO 2).
@@ -22,12 +21,23 @@ pub fn setup(ctx: &mut Context) {
 }
 
 pub fn forever(ctx: &mut Context) {
-    match device!(ctx, reader).read_tag() {
-        Ok(Some(tag)) => ctx.logger.info(format_args!(
-            "TEST: tag uid={:02x}{:02x}{:02x}{:02x} sak=0x{:02x} atqa=0x{:04x}",
-            tag.uid[0], tag.uid[1], tag.uid[2], tag.uid[3], tag.sak, tag.atqa
-        )),
-        Ok(None) => ctx.logger.info("TEST: tag none"),
+    let reader = device!(ctx, reader);
+    match reader.new_card_present() {
+        Ok(atqa) => match reader.select(&atqa) {
+            Ok(uid) => {
+                let bytes = uid.as_bytes();
+                ctx.logger.info(format_args!(
+                    "TEST: tag uid={:02x}{:02x}{:02x}{:02x}",
+                    bytes[0], bytes[1], bytes[2], bytes[3]
+                ));
+            }
+            Err(error) => ctx
+                .logger
+                .error(format_args!("TEST: tag select failed: {error:?}")),
+        },
+        Err(mfrc522::Error::Timeout) | Err(mfrc522::Error::IncompleteFrame) => {
+            ctx.logger.info("TEST: tag none")
+        }
         Err(error) => ctx
             .logger
             .error(format_args!("TEST: tag read failed: {error:?}")),

@@ -1,28 +1,39 @@
-// The external `<pcf857x>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// The external `<pcf857x>` driver: manifest only. The published `pcf857x`
+// 0.5.0 crate implements the part over `embedded-hal` 1.0 and
+// `new(i2c, SlaveAddr)` builds the expander in one call, so this `.kdl` is the
+// whole driver. The `dependency` block writes that crate into the generated
+// project's `Cargo.toml`; no `espforge-drivers` module or feature is involved.
+//
+// `Pcf8574::new` is infallible and writes nothing, so `fallible #false`.
+// `SlaveAddr` is an enum with no `From<u8>`, so `map "address"` gives each of
+// the eight addresses `0x20..=0x27` the value built from A2, A1 and A0.
 driver "pcf857x" {
     format_version 2
     summary "NXP PCF8574 8-bit quasi-bidirectional I2C I/O expander driver"
-    description "Drives the eight pins of a PCF8574 over an I2C bus. The part has no register file: one byte written is the port's output latch and one byte read is the level on its pins, so the constructor sends no transaction. A written 0 drives a pin low and a written 1 only releases it to its pull-up, which is why a read of a released pin can still be low. The Rust half is the `pcf857x-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    description "Drives the eight pins of a PCF8574 over an I2C bus. The part has no register file: one byte written is the port's output latch and one byte read is the level on its pins. A written 0 drives a pin low and a written 1 only releases it to its pull-up, which is why a read of a released pin can still be low. The Rust half is the published `pcf857x` crate, so this manifest is the whole driver."
     category "expander"
 
-    dependency "pcf857x-driver" {
-        path "../pcf857x-driver"
-    }
+    dependency "pcf857x" { version "0.5.0" }
 
     bus "i2c" {
         address allowed="0x20..=0x27"
     }
 
     codegen {
-        // `Pcf857x::new` cannot fail and writes nothing, so emission maps no
-        // error.
         fallible #false
+        map "address" {
+            "0x20" { expr "pcf857x::SlaveAddr::default()" }
+            "0x21" { expr "pcf857x::SlaveAddr::Alternative(false, false, true)" }
+            "0x22" { expr "pcf857x::SlaveAddr::Alternative(false, true, false)" }
+            "0x23" { expr "pcf857x::SlaveAddr::Alternative(false, true, true)" }
+            "0x24" { expr "pcf857x::SlaveAddr::Alternative(true, false, false)" }
+            "0x25" { expr "pcf857x::SlaveAddr::Alternative(true, false, true)" }
+            "0x26" { expr "pcf857x::SlaveAddr::Alternative(true, true, false)" }
+            "0x27" { expr "pcf857x::SlaveAddr::Alternative(true, true, true)" }
+        }
         runtime "blocking" {
-            type "pcf857x_driver::Pcf857x<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
-            constructor "pcf857x_driver::Pcf857x::new({bus_device}, {address})"
+            type "pcf857x::Pcf8574<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
+            constructor "pcf857x::Pcf8574::new({bus_device}, {address})"
             endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
         }
     }

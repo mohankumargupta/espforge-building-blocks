@@ -4,16 +4,15 @@
     "pcf857x": {
       "kind": "local",
       "source": "./drivers/pcf857x.kdl",
-      "manifest_sha256": "fb362abae4f5b2d044473b257d575eb48e7d581ba0b8d7680bc24bff5113e7d8",
+      "manifest_sha256": "22ad7441e323cd1b0f557b48c401ee2f820c765202145128bdf7fbf2e3596d69",
       "dependencies": [
         {
-          "package": "pcf857x-driver",
-          "path": "../pcf857x-driver"
+          "package": "pcf857x"
         }
       ],
       "crate": {
-        "package": "pcf857x-driver",
-        "path": "../pcf857x-driver"
+        "package": "pcf857x",
+        "version": "0.5.0"
       }
     }
   }

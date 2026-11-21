@@ -1,9 +1,9 @@
-//! Happy-path fixture for the project-local `<ina219>` driver.
+//! Happy-path fixture for the `<ina219>` driver.
 //!
 //! The driver itself is the generated `power` device: `Devices::new` builds
-//! `ina219_driver::Ina219`, which configures the part and loads the
-//! calibration. This app then reads the four data registers once a second and
-//! logs the converted values:
+//! `ina219::SyncIna219` with the fixture's calibration, after resetting the
+//! part and loading the calibration register. This app then reads one
+//! measurement a second and logs the converted values:
 //!
 //! - `TEST: ina219 boot`
 //! - `TEST: ina219 bus=5.00 v shunt=10.00 mv current=100.00 ma power=500.00 mw`
@@ -22,14 +22,15 @@ pub fn setup(ctx: &mut Context) {
 }
 
 pub fn forever(ctx: &mut Context) {
-    match device!(ctx, power).read() {
-        Ok(reading) => ctx.logger.info(format_args!(
+    match device!(ctx, power).next_measurement() {
+        Ok(Some(reading)) => ctx.logger.info(format_args!(
             "TEST: ina219 bus={:.2} v shunt={:.2} mv current={:.2} ma power={:.2} mw",
-            reading.bus_voltage_v,
-            reading.shunt_voltage_mv,
-            reading.current_ma,
-            reading.power_mw
+            f32::from(reading.bus_voltage.voltage_mv()) / 1000.0,
+            f32::from(reading.shunt_voltage.shunt_voltage_mv()),
+            reading.current.0 as f32 / 1000.0,
+            reading.power.0 as f32 / 1000.0
         )),
+        Ok(None) => {}
         Err(error) => ctx
             .logger
             .error(format_args!("TEST: ina219 read failed: {error:?}")),

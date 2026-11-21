@@ -1,26 +1,55 @@
-// The external `<ina219>` driver: a project-local manifest, not a module in
-// espforge-drivers. `codegen.feature` is absent, so the dependency below is
-// written into the generated project's Cargo.toml instead of selecting an
-// espforge-drivers feature.
+// The external `<ina219>` driver: manifest only. The published `ina219` 0.2.1
+// crate implements the monitor over `embedded-hal` 1.0 and
+// `SyncIna219::new_calibrated(i2c, Address, Calib)` builds it in one call, so
+// this `.kdl` is the whole driver. The `dependency` block writes that crate
+// into the generated project's `Cargo.toml`; no `espforge-drivers` module or
+// feature is involved.
+//
+// `Address` is `TryFrom<u8>`, not `From<u8>`, so `map "address"` covers all
+// sixteen addresses. The calibration is the fixture's 0.1 ohm shunt at a
+// 100 uA current LSB, which `IntCalibration` turns into the current and power
+// scales.
 driver "ina219" {
     format_version 2
     summary "TI INA219 current and power monitor on I2C"
-    description "Measures bus voltage, shunt voltage, current and power with a TI INA219 over an I2C bus. The driver writes the configuration register and a calibration for a 0.1 ohm shunt at a 100 uA current LSB at construction, then reads the four data registers in one transaction and converts them with the datasheet's scale factors. The Rust half is the `ina219-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    description "Measures bus voltage, shunt voltage, current and power with a TI INA219 over an I2C bus. Construction resets the part and loads the calibration for a 0.1 ohm shunt at a 100 uA current LSB; `next_measurement()` then reads the data registers in one transaction and converts them with the calibration and the datasheet's scale factors. The Rust half is the published `ina219` crate, so this manifest is the whole driver."
     category "sensor"
 
-    dependency "ina219-driver" {
-        path "../ina219-driver"
-    }
+    dependency "ina219" { version "0.2.1" }
 
     bus "i2c" {
         address allowed="0x40..=0x4F"
     }
 
     codegen {
+        // `new_unchecked` stores the power-on configuration the virtual part
+        // models; the calibration is loaded by its own step.
+        fallible #false
+        map "address" {
+            "0x40" { expr "ina219::address::Address::from_byte(0x40).unwrap()" }
+            "0x41" { expr "ina219::address::Address::from_byte(0x41).unwrap()" }
+            "0x42" { expr "ina219::address::Address::from_byte(0x42).unwrap()" }
+            "0x43" { expr "ina219::address::Address::from_byte(0x43).unwrap()" }
+            "0x44" { expr "ina219::address::Address::from_byte(0x44).unwrap()" }
+            "0x45" { expr "ina219::address::Address::from_byte(0x45).unwrap()" }
+            "0x46" { expr "ina219::address::Address::from_byte(0x46).unwrap()" }
+            "0x47" { expr "ina219::address::Address::from_byte(0x47).unwrap()" }
+            "0x48" { expr "ina219::address::Address::from_byte(0x48).unwrap()" }
+            "0x49" { expr "ina219::address::Address::from_byte(0x49).unwrap()" }
+            "0x4A" { expr "ina219::address::Address::from_byte(0x4A).unwrap()" }
+            "0x4B" { expr "ina219::address::Address::from_byte(0x4B).unwrap()" }
+            "0x4C" { expr "ina219::address::Address::from_byte(0x4C).unwrap()" }
+            "0x4D" { expr "ina219::address::Address::from_byte(0x4D).unwrap()" }
+            "0x4E" { expr "ina219::address::Address::from_byte(0x4E).unwrap()" }
+            "0x4F" { expr "ina219::address::Address::from_byte(0x4F).unwrap()" }
+        }
         runtime "blocking" {
-            type "ina219_driver::Ina219<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
-            constructor "ina219_driver::Ina219::new({bus_device}, {address})"
+            type "ina219::SyncIna219<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>, ina219::calibration::IntCalibration>"
+            constructor "ina219::SyncIna219::new_unchecked({bus_device}, {address}, ina219::calibration::IntCalibration::new(ina219::calibration::MicroAmpere(100), 100_000).unwrap())"
             endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
+            then {
+                call "calibrate(ina219::calibration::IntCalibration::new(ina219::calibration::MicroAmpere(100), 100_000).unwrap())"
+            }
         }
     }
 

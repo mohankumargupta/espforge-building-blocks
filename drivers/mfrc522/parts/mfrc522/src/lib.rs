@@ -53,6 +53,11 @@ const VERSION_VALUE: u8 = 0x92;
 /// anything else leave the register file alone.
 const SOFT_RESET: u8 = 0x0F;
 const TRANSCEIVE: u8 = 0x0C;
+const CALC_CRC: u8 = 0x03;
+
+/// `DivIrqReg`: the CRC coprocessor finished.
+const DIV_IRQ: usize = 0x05;
+const CRC_IRQ: u8 = 0x04;
 
 /// `ComIrqReg`: a card answered, the reader is idle, the timer ran out.
 const IRQ_RX: u8 = 0x20;
@@ -96,6 +101,8 @@ struct Mfrc522 {
     fifo: Vec<u8>,
     /// `ComIrqReg`, set by the last exchange and cleared when it is read.
     com_irq: u8,
+    /// `DivIrqReg`: `CRCIRq` once a `CalcCRC` finished, cleared on read.
+    div_irq: u8,
     /// `CRCResultRegH`/`L`: the CRC_A of the last answer, high byte first.
     crc: u16,
     /// The last wire address byte, for a read the emulator delivers as its
@@ -103,6 +110,11 @@ struct Mfrc522 {
     command: u8,
     /// An address phase arrived and its answer phase is still to come.
     pending: bool,
+    /// An address-only write arrived; the following transfer carries its data.
+    burst: Option<usize>,
+    /// `Transceive` was commanded and is waiting for `BitFraming`'s StartSend
+    /// (or, for a driver that never writes StartSend, for the next read).
+    pending_transceive: bool,
 
     /// Whether a card is in the field.
     present: bool,
@@ -120,9 +132,12 @@ impl Default for Mfrc522 {
             regs: power_on_registers(),
             fifo: Vec::new(),
             com_irq: 0,
+            div_irq: 0,
             crc: 0,
             command: 0,
             pending: false,
+            burst: None,
+            pending_transceive: false,
             present: true,
             uid: DEFAULT_UID,
         }
@@ -191,28 +206,82 @@ impl Device for Mfrc522 {
         // A transfer that reads nothing is a write: the address byte, then the
         // value.
         if spi.rx_len == 0 {
+            if let Some(register) = self.burst.take() {
+                // The data half of a split transaction: every byte goes to the
+                // register its own address transfer named.
+                for &byte in &spi.tx {
+                    self.write(register, byte);
+                }
+                return None;
+            }
             if let Some(&first) = spi.tx.first() {
                 if first & READ != 0 {
                     // A command-only read: its answer phase is still to come.
                     self.command = first;
                     self.pending = true;
+                } else if spi.tx.len() == 1 {
+                    // An address-only write; its data follows in its own
+                    // transfer.
+                    self.pending = false;
+                    self.burst = Some((first >> 1) as usize);
                 } else if let Some(&value) = spi.tx.get(1) {
                     self.pending = false;
-                    self.write((first >> 1) as usize, value);
+                    let register = (first >> 1) as usize;
+                    if register == FIFO_DATA {
+                        // A multi-byte FIFO write: every byte after the address.
+                        for &byte in &spi.tx[1..] {
+                            self.write(FIFO_DATA, byte);
+                        }
+                    } else {
+                        self.write(register, value);
+                    }
                 }
             }
             return None;
         }
         if let Some(&first) = spi.tx.first() {
+            if let Some(register) = self.burst.take() {
+                // The data half of a split write: every byte goes to the
+                // register its own address transfer named, whatever its bit 7
+                // says (0x93 is both a select byte and a read address).
+                for &byte in &spi.tx {
+                    self.write(register, byte);
+                }
+                return Some(reply(vec![0u8; spi.rx_len as usize]));
+            }
             if first & READ != 0 {
                 // The address. A transfer longer than its own write carries
                 // the answer with it; a full-duplex address phase is answered
                 // with bytes the master clocks in and ignores, and the answer
                 // phase follows.
+                self.burst = None;
                 self.command = first;
+                if self.pending {
+                    // The answer phase of a split read: all its bytes are the
+                    // registers that start at the address transfer.
+                    self.pending = false;
+                    let data = self.serve((first >> 1) as usize, spi.rx_len);
+                    return Some(reply(data));
+                }
                 if spi.rx_len as usize > spi.tx.len() {
                     self.pending = false;
                     let data = self.serve((first >> 1) as usize, spi.rx_len);
+                    return Some(reply(data));
+                }
+                if spi.tx.len() == 1 {
+                    // An address-only read; its answer follows in its own
+                    // transfer, filling every byte with data.
+                    self.pending = true;
+                    return Some(reply(vec![0u8; spi.rx_len as usize]));
+                }
+                if spi.rx_len as usize == spi.tx.len() {
+                    // The address and the answer in one full-duplex frame: the
+                    // bytes after the address are the register's value.
+                    let mut data = vec![0u8; spi.rx_len as usize];
+                    if spi.rx_len > 1 {
+                        let answer = self.serve((first >> 1) as usize, spi.rx_len - 1);
+                        data[1..].copy_from_slice(&answer);
+                    }
                     return Some(reply(data));
                 }
                 self.pending = true;
@@ -225,10 +294,24 @@ impl Device for Mfrc522 {
                 let data = self.serve((self.command >> 1) as usize, spi.rx_len);
                 return Some(reply(data));
             }
+            if spi.tx.len() == 1 {
+                // An address-only write; its data follows in its own transfer.
+                self.pending = false;
+                self.burst = Some((first >> 1) as usize);
+                return Some(reply(vec![0u8; spi.rx_len as usize]));
+            }
             if let Some(&value) = spi.tx.get(1) {
                 // A full-duplex write: the frame is the address and the value,
                 // and the read half is what the master ignores.
-                self.write((first >> 1) as usize, value);
+                self.pending = false;
+                let register = (first >> 1) as usize;
+                if register == FIFO_DATA {
+                    for &byte in &spi.tx[1..] {
+                        self.write(FIFO_DATA, byte);
+                    }
+                } else {
+                    self.write(register, value);
+                }
                 return Some(reply(vec![0u8; spi.rx_len as usize]));
             }
         }
@@ -266,6 +349,11 @@ impl Mfrc522 {
                 self.com_irq = 0;
                 irq
             }
+            DIV_IRQ => {
+                let irq = self.div_irq;
+                self.div_irq = 0;
+                irq
+            }
             ERROR => 0,
             FIFO_DATA => {
                 if self.fifo.is_empty() {
@@ -291,9 +379,22 @@ impl Mfrc522 {
                 self.regs[COMMAND] = value;
                 match value {
                     SOFT_RESET => self.soft_reset(),
-                    TRANSCEIVE => self.transceive(),
-                    _ => {} // Idle, and the commands this part does not model.
+                    TRANSCEIVE => self.pending_transceive = true,
+                    CALC_CRC => {
+                        if !self.fifo.is_empty() {
+                            self.crc = crc_a(&self.fifo);
+                            self.div_irq = CRC_IRQ;
+                        }
+                    }
+                    _ => self.pending_transceive = false, // Idle, and unmodelled commands.
                 }
+            }
+            DIV_IRQ => self.div_irq &= !value,
+            BIT_FRAMING if value & 0x80 != 0 => {
+                // StartSend: the command starts now, with these last bits.
+                self.regs[BIT_FRAMING] = value & 0x07;
+                self.pending_transceive = false;
+                self.transceive();
             }
             COM_IRQ => self.com_irq &= !value,
             FIFO_DATA => {
@@ -314,17 +415,35 @@ impl Mfrc522 {
     /// `len` registers from `start`, which is one read: the address increments
     /// across the answer.
     fn serve(&mut self, start: usize, len: u32) -> Vec<u8> {
-        (0..len as usize).map(|i| self.read(start + i)).collect()
+        // A driver that commands `Transceive` without StartSend has its
+        // exchange run before the first answer is read.
+        if self.pending_transceive {
+            self.pending_transceive = false;
+            self.transceive();
+        }
+        (0..len as usize)
+            .map(|i| {
+                if start & 0x3F == FIFO_DATA {
+                    // The FIFO is one port, not a register file: every byte
+                    // pops the next one.
+                    self.read(FIFO_DATA)
+                } else {
+                    self.read(start + i)
+                }
+            })
+            .collect()
     }
 
     /// The soft reset: back to the power-on register file, with an empty FIFO.
     /// The card is not the reader, so it stays in the field.
-    fn soft_reset(&mut self) {
-        self.regs = power_on_registers();
+    fn soft_reset(&mut self) {                self.regs = power_on_registers();
         self.fifo.clear();
         self.com_irq = 0;
+        self.div_irq = 0;
         self.crc = 0;
         self.pending = false;
+        self.burst = None;
+        self.pending_transceive = false;
     }
 
     /// `Transceive`: what is in the FIFO goes out, and what the card answers
@@ -518,6 +637,53 @@ mod tests {
         let mut chip = chip();
         assert_eq!(read(&mut chip, VERSION, 1), [0x92]);
         assert_eq!(((VERSION as u8) << 1) | READ, 0xEE);
+    }
+
+    #[test]
+    fn the_calc_crc_command_checksums_the_fifo() {
+        let mut chip = chip();
+        let frame = [0x93, 0x70, 0xDE, 0xAD, 0xBE, 0xEF, 0x22];
+        push(&mut chip, &frame);
+        write(&mut chip, COMMAND, CALC_CRC);
+        assert_eq!(read(&mut chip, DIV_IRQ, 1)[0] & CRC_IRQ, CRC_IRQ);
+        let low = read(&mut chip, CRC_RESULT_L, 1)[0];
+        let high = read(&mut chip, CRC_RESULT_H, 1)[0];
+        assert_eq!(u16::from_le_bytes([low, high]), crc_a(&frame));
+    }
+
+    #[test]
+    fn a_full_duplex_split_fifo_write_pushes_every_byte() {
+        let mut chip = chip();
+        let address = [(FIFO_DATA as u8) << 1];
+        assert!(chip.on_bus(&request(&address, 1)).is_some(), "the address phase");
+        assert!(
+            chip.on_bus(&request(&[0x93, 0x20], 2)).is_some(),
+            "the data phase, clocked both ways"
+        );
+        assert_eq!(read(&mut chip, FIFO_LEVEL, 1), [2]);
+        assert_eq!(read(&mut chip, FIFO_DATA, 1), [0x93]);
+        assert_eq!(read(&mut chip, FIFO_DATA, 1), [0x20]);
+    }
+
+    #[test]
+    fn a_split_fifo_write_pushes_every_byte() {
+        let mut chip = chip();
+        let address = [(FIFO_DATA as u8) << 1];
+        assert_eq!(chip.on_bus(&request(&address, 0)), None, "the address phase");
+        assert_eq!(chip.on_bus(&request(&[0x93, 0x20], 0)), None, "the data phase");
+        assert_eq!(read(&mut chip, FIFO_LEVEL, 1), [2]);
+        assert_eq!(read(&mut chip, FIFO_DATA, 1), [0x93]);
+        assert_eq!(read(&mut chip, FIFO_DATA, 1), [0x20]);
+    }
+
+    #[test]
+    fn a_full_duplex_read_answers_after_the_address() {
+        // `[address | READ, 0]` in one transfer: the second byte is the value.
+        let mut chip = chip();
+        let answer = chip
+            .on_bus(&request(&[((VERSION as u8) << 1) | READ, 0], 2))
+            .expect("the read is answered in the same frame");
+        assert_eq!(answer.data, [0x00, 0x92]);
     }
 
     #[test]

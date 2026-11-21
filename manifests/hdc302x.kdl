@@ -1,17 +1,23 @@
-// The external `<hdc302x>` driver: a project-local manifest, not a module in
-// espforge-drivers. It is not manifest only yet: the published `hdc302x` 0.5.0
-// crate takes its own address enum and a delay, so the protocol stays in the
-// `hdc302x-driver` crate beside this manifest. The `dependency` block points
-// the generated project at that crate; no `espforge-drivers` feature is
+// The external `<hdc302x>` driver: manifest only. The published `hdc302x`
+// 0.5.0 crate implements the part over `embedded-hal` 1.0 and
+// `new(i2c, delay, I2cAddr)` builds the sensor in one call, so this `.kdl` is
+// the whole driver. The `dependency` block writes that crate into the
+// generated project's `Cargo.toml`; no `espforge-drivers` module or feature is
 // involved.
+//
+// `new` is infallible, so `fallible #false`. Its blocking API lives behind the
+// crate's `blocking` feature (on by default) and its address is an enum, so
+// `map "address"` covers the four values `0x44..=0x47`.
 driver "hdc302x" {
     format_version 2
     summary "TI HDC302x temperature and relative humidity sensor on I2C"
-    description "Reads temperature and relative humidity from a TI HDC302x over an I2C bus. The part is command-driven and has no register pointer: the driver sends the two-byte soft reset at construction, then triggers one on-demand measurement and reads the four answer bytes. The datasheet's conversions turn the two 16-bit counts into degrees Celsius and percent relative humidity. The Rust half is the `hdc302x-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    description "Reads temperature and relative humidity from a TI HDC302x over an I2C bus. `one_shot(LowPowerMode)` sends the two-byte measurement command, waits the conversion time and reads the two CRC-checked 16-bit counts; `centigrade()` and `humidity_percent()` apply the datasheet conversions. The Rust half is the published `hdc302x` crate, so this manifest is the whole driver."
     category "sensor"
 
-    dependency "hdc302x-driver" {
-        path "../hdc302x-driver"
+    dependency "hdc302x" {
+        version "0.5.0"
+        default_features #false
+        features "blocking"
     }
 
     bus "i2c" {
@@ -19,9 +25,19 @@ driver "hdc302x" {
     }
 
     codegen {
+        fallible #false
+        map "delay" {
+            "runtime" { expr "espforge_runtime::Delay::new()" }
+        }
+        map "address" {
+            "0x44" { expr "hdc302x::I2cAddr::Addr00" }
+            "0x45" { expr "hdc302x::I2cAddr::Addr01" }
+            "0x46" { expr "hdc302x::I2cAddr::Addr10" }
+            "0x47" { expr "hdc302x::I2cAddr::Addr11" }
+        }
         runtime "blocking" {
-            type "hdc302x_driver::Hdc302x<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
-            constructor "hdc302x_driver::Hdc302x::new({bus_device}, {address})"
+            type "hdc302x::Hdc302x<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>, espforge_runtime::Delay>"
+            constructor "hdc302x::Hdc302x::new({bus_device}, {delay}, {address})"
             endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
         }
     }
@@ -29,6 +45,10 @@ driver "hdc302x" {
     attr "init" kind="choice" default="boot" {
         choices "boot" "deferred"
         help "`boot` builds the sensor during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+    attr "delay" kind="choice" default="runtime" {
+        choices "runtime"
+        help "The delay handle the driver takes; espforge always passes the runtime's own."
     }
 
     example "minimal" #"<hdc302x id=\"climate\" bus=\"$i2c0\" address=\"0x44\" />"#

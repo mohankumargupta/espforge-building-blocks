@@ -4,16 +4,15 @@
     "ina219": {
       "kind": "local",
       "source": "./drivers/ina219.kdl",
-      "manifest_sha256": "aedb1688815e14716d2949c2280180f9a9775f5f801102e6e38e12fe9117a661",
+      "manifest_sha256": "0eee764bd8e6fff5293027bcdb635041335f62cb998bb15b41f0fcc761ad490c",
       "dependencies": [
         {
-          "package": "ina219-driver",
-          "path": "../ina219-driver"
+          "package": "ina219"
         }
       ],
       "crate": {
-        "package": "ina219-driver",
-        "path": "../ina219-driver"
+        "package": "ina219",
+        "version": "0.2.1"
       }
     }
   }

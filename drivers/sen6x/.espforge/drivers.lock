@@ -4,16 +4,15 @@
     "sen6x": {
       "kind": "local",
       "source": "./drivers/sen6x.kdl",
-      "manifest_sha256": "378816c7467cd20aa60d420e9f7bbca9f60d5048ff1f2e25ec2e289de253e44e",
+      "manifest_sha256": "618203c3b75369404e7b7a356f60f3e4e34f9a9f2fdf1922d139c2cad636f03f",
       "dependencies": [
         {
-          "package": "sen6x-driver",
-          "path": "../sen6x-driver"
+          "package": "sen6x"
         }
       ],
       "crate": {
-        "package": "sen6x-driver",
-        "path": "../sen6x-driver"
+        "package": "sen6x",
+        "version": "0.1.4"
       }
     }
   }

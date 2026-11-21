@@ -176,12 +176,13 @@ impl Hdc302x {
         self.triggered = false;
     }
 
-    /// The four measurement bytes: temperature, then humidity, big-endian.
-    fn measurement(&self) -> [u8; 4] {
+    /// The six measurement bytes: temperature, then humidity, big-endian,
+    /// each followed by a CRC byte.
+    fn measurement(&self) -> [u8; 6] {
         // A fresh part that was never triggered has no answer yet; the bus
         // floats, which is all ones.
         if !self.triggered {
-            return [0xFF; 4];
+            return [0xFF; 6];
         }
         let temperature = ((self.temperature - CONVERSION_MIN_TEMPERATURE)
             / CONVERSION_TEMPERATURE_SPAN
@@ -191,11 +192,16 @@ impl Hdc302x {
         let humidity = (self.humidity / 100.0 * FULL_SCALE)
             .round()
             .clamp(0.0, FULL_SCALE) as u16;
+        // The datasheet sends each 16-bit value with a CRC byte after it. The
+        // crate reads with that three-byte stride; the fixture manifest turns
+        // the crate's `crc` feature off, so a placeholder is enough.
         [
             (temperature >> 8) as u8,
             temperature as u8,
+            0x00,
             (humidity >> 8) as u8,
             humidity as u8,
+            0x00,
         ]
     }
 }
@@ -241,7 +247,7 @@ mod tests {
     /// One on-demand measurement, the way the driver takes it.
     fn measurement(chip: &mut Hdc302x) -> Vec<u8> {
         assert_eq!(transfer(chip, &TRIGGER_ON_DEMAND, 0), Some(vec![]));
-        transfer(chip, &[], 4).expect("four measurement bytes")
+        transfer(chip, &[], 6).expect("two three-byte measurement words")
     }
 
     #[test]
@@ -249,7 +255,7 @@ mod tests {
         let mut chip = chip();
         assert_eq!(
             measurement(&mut chip),
-            [0x62, 0xBE, 0x73, 0x33],
+            [0x62, 0xBE, 0x00, 0x73, 0x33, 0x00],
             "25278 and 29491 counts"
         );
     }
@@ -258,8 +264,8 @@ mod tests {
     fn an_untriggered_part_has_no_answer() {
         let mut chip = chip();
         assert_eq!(
-            transfer(&mut chip, &[], 4),
-            Some(vec![0xFF; 4]),
+            transfer(&mut chip, &[], 6),
+            Some(vec![0xFF; 6]),
             "the bus floats until a measurement is triggered"
         );
     }
@@ -271,7 +277,7 @@ mod tests {
         chip.on_input("set:humidity=60");
         assert_eq!(
             measurement(&mut chip),
-            [0x6D, 0xB6, 0x99, 0x99],
+            [0x6D, 0xB6, 0x00, 0x99, 0x99, 0x00],
             "28086 and 39321 counts"
         );
     }
@@ -283,12 +289,12 @@ mod tests {
         chip.on_input("set:humidity=0");
         // -45 is below the part's -40 range, so the floor is -40: (40 - 45)
         // below zero, i.e. 5 of the 175 degrees, which is 1872 counts.
-        assert_eq!(measurement(&mut chip), [0x07, 0x50, 0x00, 0x00]);
+        assert_eq!(measurement(&mut chip), [0x07, 0x50, 0x00, 0x00, 0x00, 0x00]);
         // 125 °C is short of the conversion's 130 °C full scale: (125 + 45)
         // of the 175 degrees, which is 63663 counts.
         chip.on_input("set:temperature=125");
         chip.on_input("set:humidity=100");
-        assert_eq!(measurement(&mut chip), [0xF8, 0xAF, 0xFF, 0xFF]);
+        assert_eq!(measurement(&mut chip), [0xF8, 0xAF, 0x00, 0xFF, 0xFF, 0x00]);
     }
 
     #[test]
@@ -298,7 +304,7 @@ mod tests {
         assert!(chip.triggered);
         assert_eq!(transfer(&mut chip, &SOFT_RESET, 0), Some(vec![]));
         assert!(!chip.triggered);
-        assert_eq!(transfer(&mut chip, &[], 4), Some(vec![0xFF; 4]));
+        assert_eq!(transfer(&mut chip, &[], 6), Some(vec![0xFF; 6]));
         assert_eq!(
             (chip.temperature, chip.humidity),
             (DEFAULT_TEMPERATURE, DEFAULT_HUMIDITY),
@@ -325,7 +331,7 @@ mod tests {
         chip.on_input("rest");
         assert_eq!(
             measurement(&mut chip),
-            [0x62, 0xBE, 0x73, 0x33]
+            [0x62, 0xBE, 0x00, 0x73, 0x33, 0x00]
         );
     }
 
@@ -364,8 +370,8 @@ mod tests {
             "a command this part does not model is acknowledged and ignored"
         );
         assert_eq!(
-            transfer(&mut chip, &[], 4),
-            Some(vec![0x62, 0xBE, 0x73, 0x33]),
+            transfer(&mut chip, &[], 6),
+            Some(vec![0x62, 0xBE, 0x00, 0x73, 0x33, 0x00]),
             "the last measurement still stands"
         );
     }

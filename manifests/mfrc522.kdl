@@ -1,19 +1,20 @@
-// The external `<mfrc522>` driver: a project-local manifest, not a module in
-// espforge-drivers (there is no bundled MFRC522 driver). It is not manifest
-// only yet: the published `mfrc522` 0.8.0 crate needs the bus wrapped in its
-// `SpiInterface` and an `init()` typestate rebind, so the protocol stays in
-// the `mfrc522-driver` crate beside this manifest. The `dependency` block
-// points the generated project at that crate; no `espforge-drivers` feature is
-// involved.
+// The external `<mfrc522>` driver: manifest only (there is no bundled MFRC522
+// driver). The published `mfrc522` 0.8.0 crate implements the reader over
+// `embedded-hal` 1.0; its blocking SPI transport wraps the bus in its own
+// `SpiInterface`, so this `.kdl` is the whole driver. The `dependency` block
+// writes that crate into the generated project's `Cargo.toml`; no
+// `espforge-drivers` module or feature is involved.
+//
+// `Mfrc522::new(comm)` returns an uninitialised reader and `init(self)` returns
+// `Mfrc522<_, Initialized>`, so the `then` step rebinds and `type` names the
+// post-init reader. The crate's optional `eh02` feature stays off.
 driver "mfrc522" {
     format_version 2
     summary "NXP MFRC522 contactless reader with a MIFARE Classic card on SPI"
-    description #"Speaks the MFRC522's 4-wire SPI protocol: one address byte (register << 1, bit 7 set for a read), no dummy byte. The constructor soft-resets the reader, checks VersionReg (0x37) for 0x92 or 0x91, applies the standard timer/ASK/mode init and switches the antenna on. read_tag() runs REQA, anticollision CL1 and select CL1 and returns the ATQA, the 4-byte UID and the SAK, or None when no card answers. The Rust half is the `mfrc522-driver` crate beside this manifest, so the driver is external to espforge-drivers."#
+    description "Speaks the MFRC522's 4-wire SPI protocol: one address byte (register << 1, bit 7 set for a read), no dummy byte. `init()` soft-resets the reader, checks VersionReg (0x37) for 0x92 or 0x91, applies the standard timer/ASK/mode setup and switches the antenna on. `new_card_present()` runs REQA and `select()` runs the anticollision and select commands, returning the card's UID. The Rust half is the published `mfrc522` crate, so this manifest is the whole driver."
     category "sensor"
 
-    dependency "mfrc522-driver" {
-        path "../mfrc522-driver"
-    }
+    dependency "mfrc522" { version "0.8.0" }
 
     bus "spi" {
         mode 0
@@ -21,10 +22,15 @@ driver "mfrc522" {
     }
 
     codegen {
+        fallible #false
         runtime "blocking" {
-            type "mfrc522_driver::Mfrc522<espforge_runtime::ConfiguredSpiDevice>"
-            constructor "mfrc522_driver::Mfrc522::new({bus_device})"
+            type "mfrc522::Mfrc522<mfrc522::comm::blocking::spi::SpiInterface<espforge_runtime::ConfiguredSpiDevice, mfrc522::comm::blocking::spi::DummyDelay>, mfrc522::Initialized>"
+            constructor "mfrc522::Mfrc522::new(mfrc522::comm::blocking::spi::SpiInterface::new({bus_device}))"
             endpoint "espforge_runtime::ConfiguredSpiDevice"
+            then {
+                call "init()"
+                rebind #true
+            }
         }
     }
 

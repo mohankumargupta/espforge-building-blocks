@@ -954,12 +954,12 @@ mfrc522-sensor: mfrc522-image mfrc522-part
     }
     wait_for "TEST: mfrc522 boot" "firmware boots" 40
     wait_for_log "is the SPI device on chip select GPIO 7" "the part attached on the firmware's CS" 10
-    wait_for "TEST: tag uid=deadbeef sak=0x08 atqa=0x0004" "tag DEADBEEF selected with SAK 0x08" 20
+    wait_for "TEST: tag uid=deadbeef" "tag DEADBEEF selected" 20
     just mfrc522-part-input "part reader input absent" >/dev/null
     wait_for "TEST: tag none" "absent -> no tag" 20
     just mfrc522-part-input "part reader input set:uid=01:02:03:04" >/dev/null
     just mfrc522-part-input "part reader input present" >/dev/null
-    wait_for "TEST: tag uid=01020304 sak=0x08 atqa=0x0004" "set:uid=01020304 -> 01020304" 20
+    wait_for "TEST: tag uid=01020304" "set:uid=01020304 -> 01020304" 20
     echo "mfrc522-sensor PASS"
 
 # Remove the disposable images; the fixture and the checked-in wasm stay.
@@ -3598,9 +3598,11 @@ pcf857x-sensor: pcf857x-image pcf857x-part
     }
     wait_for "TEST: pcf857x boot" "firmware boots" 40
     wait_for_log "answers I2C 0x20 on GPIO 6/5" "the part attached on the firmware's SDA/SCL" 10
-    wait_for "TEST: pcf857x pins=aa" "the eight pins read back what was written" 20
+    wait_for "TEST: pcf857x wrote=aa" "a port byte was written" 20
+    wait_for "TEST: pcf857x pins=ff" "the released pins read back high" 20
     just pcf857x-part-input "part io input set:levels=0x0F" >/dev/null
-    wait_for "TEST: pcf857x pins=0a" "set:levels=0x0F -> the pins read 0x0a" 20
+    wait_for "TEST: pcf857x pins=0f" "set:levels=0x0F -> the low nibble reads low" 20
+    if grep -q 'pcf857x write failed' "$out"; then echo "FAIL: the port write failed; see $out" >&2; exit 1; fi
     echo "pcf857x-sensor PASS"
 
 # Remove the disposable images; the fixture and the checked-in wasm stay.
