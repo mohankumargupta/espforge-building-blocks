@@ -1,0 +1,40 @@
+// The external `<ads1x15>` driver: a project-local manifest, not a module in
+// espforge-drivers. `codegen.feature` is absent, so the dependency below is
+// written into the generated project's Cargo.toml instead of selecting an
+// espforge-drivers feature.
+//
+// The constructor names the chip it decodes for: this manifest instantiates
+// `Chip::Ads1115` (16-bit). Change the literal to
+// `ads1x15_driver::Chip::Ads1015` for a 12-bit part; the emulator's virtual
+// ADC is an ADS1115.
+driver "ads1x15" {
+    format_version 2
+    summary "Texas Instruments ADS1015/ADS1115 analog-to-digital converter on I2C"
+    description "Reads a single-ended channel or one of the four differential pairs over an I2C bus: the pointer register, a 16-bit big-endian configuration write that selects the input, gain and single-shot mode, then the two conversion-register bytes. There is no identity register, so the constructor reads the configuration register to prove the part answers. The Rust half is the `ads1x15-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    category "sensor"
+
+    dependency "ads1x15-driver" {
+        path "../ads1x15-driver"
+    }
+
+    bus "i2c" {
+        address allowed="0x48..=0x4B"
+    }
+
+    codegen {
+        runtime "blocking" {
+            type "ads1x15_driver::Ads1x15<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
+            constructor "ads1x15_driver::Ads1x15::new({bus_device}, {address}, ads1x15_driver::Chip::Ads1115)"
+            endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the ADC during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<ads1x15 id="adc" bus="$i2c0" address="0x48" />"#
+    example "alternate address" #"<ads1x15 id="adc" bus="$i2c0" address="0x49" />"#
+    see_also "peripherals/i2c"
+}

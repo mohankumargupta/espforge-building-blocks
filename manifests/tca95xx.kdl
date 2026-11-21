@@ -1,0 +1,34 @@
+// The external `<tca95xx>` driver: a project-local manifest, not a module in
+// espforge-drivers. `codegen.feature` is absent, so the dependency below is
+// written into the generated project's Cargo.toml instead of selecting an
+// espforge-drivers feature.
+driver "tca95xx" {
+    format_version 2
+    summary "Texas Instruments TCA9535 16-bit I2C I/O expander"
+    description "Drives the sixteen pins of a TCA9535 (and the pin-compatible PCA9535) over an I2C bus. The driver configures both ports as outputs, then writes the whole 16-bit output latch in one auto-incrementing transaction, so the two ports change together. The Rust half is the `tca95xx-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    category "expander"
+
+    dependency "tca95xx-driver" {
+        path "../tca95xx-driver"
+    }
+
+    bus "i2c" {
+        address allowed="0x20..=0x27"
+    }
+
+    codegen {
+        runtime "blocking" {
+            type "tca95xx_driver::Tca95xx<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
+            constructor "tca95xx_driver::Tca95xx::new({bus_device}, {address})"
+            endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the expander during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<tca95xx id=\"io\" bus=\"$i2c0\" address=\"0x20\" />"#
+    see_also "peripherals/i2c"
+}

@@ -1,0 +1,36 @@
+// The external `<tmp123>` driver: a project-local manifest, not a module in
+// espforge-drivers. `codegen.feature` is absent, so the dependency below is
+// written into the generated project's Cargo.toml instead of selecting an
+// espforge-drivers feature.
+driver "tmp123" {
+    format_version 2
+    summary "Texas Instruments TMP121/TMP123 SPI temperature sensor"
+    description "Reads one 16-bit word over SPI: bits 15..3 are the temperature in 13-bit two's complement at 0.0625 °C a count (SBOS273C Table 2). The Rust half is the `tmp123-driver` crate beside this manifest, so the driver is external to espforge-drivers. It does not wait for a conversion; a read returns the sensor's last result."
+    category "sensor"
+
+    dependency "tmp123-driver" {
+        path "../tmp123-driver"
+    }
+
+    bus "spi" {
+        mode 0
+        frequency "1000kHz"
+    }
+
+    codegen {
+        fallible #false
+        runtime "blocking" {
+            type "tmp123_driver::Tmp123<espforge_runtime::ConfiguredSpiDevice>"
+            constructor "tmp123_driver::Tmp123::new({bus_device})"
+            endpoint "espforge_runtime::ConfiguredSpiDevice"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the sensor during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<tmp123 id="temp" bus="$spi2" cs="7" />"#
+    see_also "peripherals/spi"
+}

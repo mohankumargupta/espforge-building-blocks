@@ -3714,6 +3714,113 @@ max7219-clean:
     rm -rf {{ max7219_out }} {{ max7219_part_dir }}/target
 
 
+# ---- HD44780 + PCF8574T virtual part fixture (drivers/hd44780) ---------
+
+hd44780_rel := "drivers/hd44780"
+hd44780_dir := justfile_directory() / hd44780_rel
+hd44780_out := build_dir / "hd44780"
+hd44780_port := "127.0.0.1:5595"
+hd44780_part_dir := hd44780_dir / "parts" / "hd44780"
+hd44780_part_wasm := hd44780_dir / "parts" / "hd44780.wasm"
+
+# The part's own tests: the nibble decoder, the commands and DDRAM, on the host.
+hd44780-part-test:
+    cargo test --manifest-path {{ hd44780_part_dir }}/Cargo.toml
+
+# Build the virtual display -> drivers/hd44780/parts/hd44780.wasm.
+hd44780-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ hd44780_part_dir }}/Cargo.toml"
+    cp "{{ hd44780_part_dir }}/target/wasm32-unknown-unknown/release/hd44780.wasm" \
+        "{{ hd44780_part_wasm }}"
+    ls -l "{{ hd44780_part_wasm }}"
+
+# Schema, resource graph, manifest discovery and the crate dependency.
+hd44780-check:
+    just check {{ hd44780_rel }}
+
+# Compile the generated project: the manifest's type, constructor, delay and
+# endpoint, and the crates.io dependency in the generated Cargo.toml.
+hd44780-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ hd44780_out }}"
+    just check "{{ hd44780_rel }}"
+    just build "{{ hd44780_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ hd44780_out }}/hd44780.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/hd44780_test" \
+        "{{ hd44780_out }}/hd44780.elf"
+    ls -l "{{ hd44780_out }}/hd44780.bin" "{{ hd44780_out }}/hd44780.elf"
+
+# Run the firmware with the virtual display on the control channel.
+hd44780-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ hd44780_out }}/hd44780.bin --cosim-board {{ hd44780_dir }}/board.json --control-tcp {{ hd44780_port }} --elf {{ hd44780_out }}/hd44780.elf --timeout {{ timeout }} --log-file {{ hd44780_out }}/emu.log"
+
+# One control line, e.g. "part lcd state".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+hd44780-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ hd44780_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/hd44780/drivers/hd44780.kdl.
+hd44780-driver-record:
+    just espforge "driver {{ hd44780_rel }} add --local {{ hd44780_rel }}/drivers/hd44780.kdl"
+
+# Happy path: boot, attach, init, and both printed lines in the part's DDRAM.
+hd44780-sensor: hd44780-image hd44780-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ hd44780_out }}/sensor.stdout"
+    log="{{ hd44780_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just hd44780-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: hd44780 boot" "firmware boots" 40
+    wait_for_log "part lcd (hd44780) attached" "the part attached on the firmware's pins" 10
+    wait_for "TEST: hd44780 line1=hd44780 ok" "the first line was printed" 20
+    wait_for "TEST: hd44780 line2=esp32c3" "the second line was printed" 20
+    state=$(just hd44780-part-input "part lcd state")
+    echo "$state"
+    for want in "line1=HD44780\ ok" "line2=esp32c3" "display=on" "backlight=on"; do
+        [[ "$state" == *"$want"* ]] || { echo "FAIL: the part did not show '$want'; got: $state" >&2; exit 1; }
+    done
+    echo "PASS: the part's DDRAM holds both lines"
+    echo "hd44780-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+hd44780-clean:
+    rm -rf {{ hd44780_out }} {{ hd44780_part_dir }}/target
+
+
 # ---- 74HC595 virtual part fixture (drivers/nxp74hc595) -------------------
 
 nxp74hc595_rel := "drivers/nxp74hc595"

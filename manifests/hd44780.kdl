@@ -1,0 +1,39 @@
+// The external `<hd44780>` driver: a project-local manifest, not a module in
+// espforge-drivers. `codegen.feature` is absent, so the dependencies below are
+// written into the generated project's Cargo.toml instead of selecting an
+// espforge-drivers feature.
+//
+// The display is an HD44780 in 4-bit mode behind a PCF8574T I2C backpack, the
+// common "I2C LCD" adapter. `i2c-character-display` 0.6.0's
+// `CharacterDisplayPCF8574T::new_with_address(i2c, address, lcd_type, delay)`
+// takes the bus first, then the element's 7-bit address, the fixed panel
+// geometry and a `DelayNs`; `new` cannot fail, hence `fallible #false`.
+driver "hd44780" {
+    format_version 2
+    summary "Hitachi HD44780 character display behind a PCF8574T I2C backpack"
+    description "Drives a 16x2 HD44780-compatible character LCD through the ubiquitous PCF8574T I2C backpack, in the adapter's 4-bit wiring: each control byte on the expander carries RS, RW, EN, the backlight and four data lines, and every display byte travels as two nibbles. The element's `address` is the backpack's 7-bit address (0x20..=0x27), passed to the crate's `new_with_address`; a PCF8574T with its address pins low answers at 0x27. Initialisation, clear, cursor placement, printing and backlight control are the crate's. The Rust half is the published `i2c-character-display` crate, so this manifest is the whole driver."
+    category "display"
+
+    dependency "i2c-character-display" { version "0.6.0" }
+
+    bus "i2c" {
+        address allowed="0x20..=0x27"
+    }
+
+    codegen {
+        fallible #false
+        runtime "blocking" {
+            type "i2c_character_display::CharacterDisplayPCF8574T<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>, espforge_runtime::Delay>"
+            constructor "i2c_character_display::CharacterDisplayPCF8574T::new_with_address({bus_device}, {address}, i2c_character_display::LcdDisplayType::Lcd16x2, espforge_runtime::Delay::new())"
+            endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the display during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<hd44780 id=\"lcd\" bus=\"$i2c0\" address=\"0x27\" />"#
+    see_also "peripherals/i2c"
+}

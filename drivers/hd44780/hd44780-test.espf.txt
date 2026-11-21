@@ -1,0 +1,20 @@
+====================
+HD44780 test firmware
+
+Fixture for drivers/hd44780: the project-local `<hd44780>` driver over I2C,
+wired to the virtual PCF8574T backpack and HD44780 controller (SCL = GPIO 6,
+SDA = GPIO 5, address 0x27). Prints `TEST:` lines the recipes assert on.
+====================
+
+# espforge
+  <project name="hd44780_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <i2c id="i2c0" sda="5" scl="6" frequency="100kHz" />
+
+# devices
+  <hd44780 id="lcd" bus="$i2c0" address="0x27" />
+
+# services

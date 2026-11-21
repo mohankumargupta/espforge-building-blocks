@@ -1,0 +1,3 @@
+{ "parts": {
+    "lcd": { "module": "parts/hd44780.wasm", "pins": { "SCL": 6, "SDA": 5 } }
+} }

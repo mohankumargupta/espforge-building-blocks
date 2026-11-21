@@ -1,0 +1,34 @@
+// The external `<tlv493d>` driver: a project-local manifest, not a module in
+// espforge-drivers. `codegen.feature` is absent, so the dependency below is
+// written into the generated project's Cargo.toml instead of selecting an
+// espforge-drivers feature.
+driver "tlv493d" {
+    format_version 2
+    summary "Infineon TLV493D-A1B6 3D magnetic sensor on I2C"
+    description "Reads the three magnetic field axes and the temperature of a TLV493D-A1B6 over an I2C bus. One transaction clocks out the part's ten-byte read frame, which starts at register 0x00 and carries Bx, By and Bz as signed 12-bit values split over two registers each, and the temperature as an unsigned 12-bit value. The driver converts them with the datasheet's 0.098 mT and 1.1 C per count. The Rust half is the `tlv493d-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    category "sensor"
+
+    dependency "tlv493d-driver" {
+        path "../tlv493d-driver"
+    }
+
+    bus "i2c" {
+        address allowed="0x5E..=0x5E"
+    }
+
+    codegen {
+        runtime "blocking" {
+            type "tlv493d_driver::Tlv493d<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
+            constructor "tlv493d_driver::Tlv493d::new({bus_device}, {address})"
+            endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the sensor during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<tlv493d id=\"field\" bus=\"$i2c0\" address=\"0x5E\" />"#
+    see_also "peripherals/i2c"
+}

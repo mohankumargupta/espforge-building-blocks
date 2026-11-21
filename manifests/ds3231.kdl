@@ -1,0 +1,34 @@
+// The external `<ds3231>` driver: a project-local manifest, not a module in
+// espforge-drivers. `codegen.feature` is absent, so the dependency below is
+// written into the generated project's Cargo.toml instead of selecting an
+// espforge-drivers feature.
+driver "ds3231" {
+    format_version 2
+    summary "Maxim DS3231 temperature-compensated real-time clock on I2C"
+    description "Keeps and reads the date and time of a DS3231 over an I2C bus. The driver clears the oscillator-stop flag at construction, checks that the seven time registers hold a valid binary-coded-decimal time, then reads seconds, minutes, hours, the day-of-week counter, the date, the month and the year, and the die temperature in quarter degrees. The registers are BCD, so the driver converts both ways and can also write a time back. The Rust half is the `ds3231-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    category "time"
+
+    dependency "ds3231-driver" {
+        path "../ds3231-driver"
+    }
+
+    bus "i2c" {
+        address allowed="0x68..=0x68"
+    }
+
+    codegen {
+        runtime "blocking" {
+            type "ds3231_driver::Ds3231<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
+            constructor "ds3231_driver::Ds3231::new({bus_device}, {address})"
+            endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the clock during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<ds3231 id=\"rtc\" bus=\"$i2c0\" address=\"0x68\" />"#
+    see_also "peripherals/i2c"
+}

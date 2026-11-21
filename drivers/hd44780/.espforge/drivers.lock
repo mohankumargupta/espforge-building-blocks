@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "drivers": {
+    "hd44780": {
+      "kind": "local",
+      "source": "./drivers/hd44780.kdl",
+      "manifest_sha256": "940556c8df094e5b1ad0edd7940375c098c442b6bdcd3d9f183ce44449e262b2",
+      "dependencies": [
+        {
+          "package": "i2c-character-display"
+        }
+      ],
+      "crate": {
+        "package": "i2c-character-display",
+        "version": "0.6.0"
+      }
+    }
+  }
+}

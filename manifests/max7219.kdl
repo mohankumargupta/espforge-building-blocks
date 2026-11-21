@@ -1,0 +1,38 @@
+// The external `<max7219>` driver: a project-local manifest, not a module in
+// espforge-drivers. `codegen.feature` is absent, so the dependency below is
+// written into the generated project's Cargo.toml instead of selecting an
+// espforge-drivers feature. Manifest only: the type and constructor come
+// straight from the `max7219` crate, so there is no Rust half beside this file.
+//
+// `bus "none"`: the chip's interface is three GPIO lines the driver toggles
+// itself, not a hardware SPI peripheral. The constructor therefore takes the
+// pins, and the fixed display count comes first.
+driver "max7219" {
+    format_version 2
+    summary "Maxim MAX7219/MAX7221 8-digit 7-segment and 8x8 LED matrix driver"
+    description "Bit-bangs the MAX7219's three-wire interface: CS goes low, sixteen bits (an 8-bit register address then an 8-bit value) are shifted out MSB first with DATA changing before each SCK rising edge, and CS rises to latch the word. `max7219` 0.5.0's `MAX7219::from_pins(1, data, cs, sck)` builds the driver from three `embedded-hal` 1.0 `OutputPin`s, so the manifest declares no bus and no MISO. It returns a `Result`, hence `fallible #true`. CS must idle high and SCK low; DATA is set before the clock. One display is declared. `power_on`, `set_intensity`, `clear_display`, `set_decode_mode`, `write_raw`, `write_raw_byte` and `test` are on the built type."
+    category "display"
+
+    dependency "max7219" { version "0.5.0" }
+
+    bus "none"
+
+    pin "data" direction="output" default_level="low"
+    pin "cs" direction="output" default_level="high"
+    pin "sck" direction="output" default_level="low"
+
+    codegen {
+        fallible #true
+        runtime "blocking" {
+            type "max7219::MAX7219<max7219::connectors::PinConnector<espforge_runtime::OutputPin, espforge_runtime::OutputPin, espforge_runtime::OutputPin>>"
+            constructor "max7219::MAX7219::from_pins(1, {data}, {cs}, {sck})"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` claims the lines and builds the display during `Devices::new`; `deferred` stores the raw pins and constructs it in `init()`."
+    }
+
+    example "minimal" #"<max7219 id=\"matrix\" data=\"3\" cs=\"7\" sck=\"6\" />"#
+}

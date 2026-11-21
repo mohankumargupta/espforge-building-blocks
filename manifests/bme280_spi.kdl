@@ -1,0 +1,35 @@
+// The external `<bme280_spi>` driver: a project-local manifest, not a module
+// in espforge-drivers (there is no bundled BME280 driver). `codegen.feature`
+// is absent, so the dependency below is written into the generated project's
+// Cargo.toml instead of selecting an espforge-drivers feature.
+driver "bme280_spi" {
+    format_version 2
+    summary "Bosch BME280 temperature, humidity and pressure sensor on SPI"
+    description "Reads the eight data bytes at 0xF7 in SPI mode: the address with bit 7 set, one dummy byte, then pressure, temperature and humidity. The constructor checks ID (0xD0) for 0x60, reads the calibration block and puts the chip in normal mode. The Rust half is the `bme280-spi-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    category "sensor"
+
+    dependency "bme280-spi-driver" {
+        path "../bme280-spi-driver"
+    }
+
+    bus "spi" {
+        mode 0
+        frequency "1000kHz"
+    }
+
+    codegen {
+        runtime "blocking" {
+            type "bme280_spi_driver::Bme280Spi<espforge_runtime::ConfiguredSpiDevice>"
+            constructor "bme280_spi_driver::Bme280Spi::new({bus_device})"
+            endpoint "espforge_runtime::ConfiguredSpiDevice"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the sensor during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<bme280_spi id="climate" bus="$spi2" cs="7" />"#
+    see_also "peripherals/spi"
+}

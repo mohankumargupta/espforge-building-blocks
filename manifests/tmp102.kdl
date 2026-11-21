@@ -1,0 +1,34 @@
+// The external `<tmp102>` driver: a project-local manifest, not a module in
+// espforge-drivers. `codegen.feature` is absent, so the dependency below is
+// written into the generated project's Cargo.toml instead of selecting an
+// espforge-drivers feature.
+driver "tmp102" {
+    format_version 2
+    summary "TI TMP102 temperature sensor on I2C"
+    description "Reads the temperature of a TMP102 over an I2C bus. The driver writes the temperature register's pointer (0x00) and clocks out the two bytes that follow: a signed 12-bit value, left-justified, at 0.0625 C per count. The Rust half is the `tmp102-driver` crate beside this manifest, so the driver is external to espforge-drivers."
+    category "sensor"
+
+    dependency "tmp102-driver" {
+        path "../tmp102-driver"
+    }
+
+    bus "i2c" {
+        address allowed="0x48..=0x48"
+    }
+
+    codegen {
+        runtime "blocking" {
+            type "tmp102_driver::Tmp102<espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>>"
+            constructor "tmp102_driver::Tmp102::new({bus_device}, {address})"
+            endpoint "espforge_runtime::embedded_hal_bus::i2c::CriticalSectionDevice<'static, esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the sensor during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<tmp102 id=\"temp\" bus=\"$i2c0\" address=\"0x48\" />"#
+    see_also "peripherals/i2c"
+}
