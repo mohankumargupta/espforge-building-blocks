@@ -3608,6 +3608,112 @@ pcf857x-clean:
     rm -rf {{ pcf857x_out }} {{ pcf857x_part_dir }}/target
 
 
+# ---- MAX7219 virtual part fixture (drivers/max7219) ---------------------
+
+max7219_rel := "drivers/max7219"
+max7219_dir := justfile_directory() / max7219_rel
+max7219_out := build_dir / "max7219"
+max7219_port := "127.0.0.1:5592"
+max7219_part_dir := max7219_dir / "parts" / "max7219"
+max7219_part_wasm := max7219_dir / "parts" / "max7219.wasm"
+
+# The part's own tests: the register file, the latch and the state, on the host.
+max7219-part-test:
+    cargo test --manifest-path {{ max7219_part_dir }}/Cargo.toml
+
+# Build the virtual MAX7219 -> drivers/max7219/parts/max7219.wasm.
+max7219-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ max7219_part_dir }}/Cargo.toml"
+    cp "{{ max7219_part_dir }}/target/wasm32-unknown-unknown/release/max7219.wasm" \
+        "{{ max7219_part_wasm }}"
+    ls -l "{{ max7219_part_wasm }}"
+
+# Schema, resource graph, manifest discovery and the crate dependency.
+max7219-check:
+    just check {{ max7219_rel }}
+
+# Compile the generated project: the manifest's type, constructor and endpoint,
+# and the crates.io dependency in the generated Cargo.toml.
+max7219-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ max7219_out }}"
+    just check "{{ max7219_rel }}"
+    just build "{{ max7219_rel }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ max7219_out }}/max7219.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/max7219_test" \
+        "{{ max7219_out }}/max7219.elf"
+    ls -l "{{ max7219_out }}/max7219.bin" "{{ max7219_out }}/max7219.elf"
+
+# Run the firmware with the virtual display on the control channel.
+max7219-run timeout="90s":
+    just esp-emu "--chip esp32c3 --firmware {{ max7219_out }}/max7219.bin --cosim-board {{ max7219_dir }}/board.json --control-tcp {{ max7219_port }} --elf {{ max7219_out }}/max7219.elf --timeout {{ timeout }} --log-file {{ max7219_out }}/emu.log"
+
+# One control line, e.g. "part matrix state".
+# `addr` stays host:port for readability; netcat-openbsd wants them separate.
+max7219-part-input args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr="{{ max7219_port }}"
+    printf '%s\n' "{{ args }}" | nc -q1 "${addr%:*}" "${addr##*:}"
+
+# Re-record the manifest hash after editing drivers/max7219/drivers/max7219.kdl.
+max7219-driver-record:
+    just espforge "driver {{ max7219_rel }} add --local {{ max7219_rel }}/drivers/max7219.kdl"
+
+# Happy path: boot, attach, a frame every second, and the part's register file.
+max7219-sensor: max7219-image max7219-part
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ max7219_out }}/sensor.stdout"
+    log="{{ max7219_out }}/emu.log"
+    : > "$out"
+    : > "$log"
+    setsid just max7219-run 90s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    wait_for() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$out" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $out" >&2
+        ls -l "$out" >&2 || true
+        return 1
+    }
+    wait_for_log() {
+        local i
+        for i in $(seq 1 "$3"); do
+            grep -q "$1" "$log" && { echo "PASS: $2"; return 0; }
+            sleep 1
+        done
+        echo "FAIL: $2 (no '$1'); see $log" >&2
+        ls -l "$log" >&2 || true
+        return 1
+    }
+    wait_for "TEST: max7219 boot" "firmware boots" 40
+    wait_for_log "is the SPI device on chip select GPIO 7" "the part attached on the firmware's CS" 10
+    wait_for "TEST: max7219 frame=aaaaaaaaaaaaaaaa" "a frame was written to the digits" 20
+    state=$(just max7219-part-input "part matrix state")
+    echo "$state"
+    for want in "digits=aaaaaaaaaaaaaaaa" "intensity=0f" "power=on" "scan=7" "decode=00" "test=off"; do
+        [[ "$state" == *"$want"* ]] || { echo "FAIL: the part did not show '$want'; got: $state" >&2; exit 1; }
+    done
+    echo "PASS: the part latched the frame and the driver's control registers"
+    echo "max7219-sensor PASS"
+
+# Remove the disposable images; the fixture and the checked-in wasm stay.
+max7219-clean:
+    rm -rf {{ max7219_out }} {{ max7219_part_dir }}/target
+
+
 # ---- examples/001-wifi-basic (networking basics) -------------------------
 
 wifi_basic_dir := justfile_directory() / "examples" / "001-wifi-basic"

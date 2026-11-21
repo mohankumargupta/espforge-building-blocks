@@ -1,0 +1,36 @@
+// The external `<max7219>` driver: a project-local manifest, not a module in
+// espforge-drivers. `codegen.feature` is absent, so the dependency below is
+// written into the generated project's Cargo.toml instead of selecting an
+// espforge-drivers feature. Manifest only: the type and constructor come
+// straight from the `max7219-display` crate, so there is no Rust half beside
+// this file.
+driver "max7219" {
+    format_version 2
+    summary "Maxim MAX7219/MAX7221 8-digit 7-segment and 8x8 LED matrix driver"
+    description "Writes the MAX7219's sixteen-bit words over SPI: an 8-bit register address followed by an 8-bit value, latched when CS is released. `max7219-display` 0.1.5's `Max7219::new(spi)` takes an `embedded-hal` 1.0 `SpiDevice` and drives CS itself, so no separate load pin is declared. `new` is infallible, so `fallible #false`; the app calls `init()` once for the crate's setup sequence and then `power_on()`. This manifest declares one display and no MISO: the chip never answers. `write_raw_digit`, `set_intensity`, `clear_display` and `power_on/off` are on the built type."
+    category "display"
+
+    dependency "max7219-display" { version "0.1.5" }
+
+    bus "spi" {
+        mode 0
+        frequency "1000kHz"
+    }
+
+    codegen {
+        fallible #false
+        runtime "blocking" {
+            type "max7219_display::driver::Max7219<espforge_runtime::ConfiguredSpiDevice>"
+            constructor "max7219_display::driver::Max7219::new({bus_device})"
+            endpoint "espforge_runtime::ConfiguredSpiDevice"
+        }
+    }
+
+    attr "init" kind="choice" default="boot" {
+        choices "boot" "deferred"
+        help "`boot` builds the display during `Devices::new`; `deferred` stores the bus and constructs it in `init()`."
+    }
+
+    example "minimal" #"<max7219 id=\"matrix\" bus=\"$spi2\" cs=\"7\" />"#
+    see_also "peripherals/spi"
+}

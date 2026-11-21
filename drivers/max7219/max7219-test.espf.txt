@@ -1,0 +1,21 @@
+====================
+MAX7219 test firmware
+
+Fixture for drivers/max7219: the project-local `<max7219>` driver over SPI,
+wired to the virtual MAX7219 part (CS = GPIO 7, SCK = GPIO 6, DIN = GPIO 3).
+The display has no MISO, so the bus is write-only. Prints `TEST:` lines the
+recipes assert on.
+====================
+
+# espforge
+  <project name="max7219_test" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <spi id="spi2" sclk="6" mosi="3" mode="0" frequency="1000kHz" />
+
+# devices
+  <max7219 id="matrix" bus="$spi2" cs="7" />
+
+# services

@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "drivers": {
+    "max7219": {
+      "kind": "local",
+      "source": "./drivers/max7219.kdl",
+      "manifest_sha256": "57227abd5894d9b84188a15ddb30f941c7f345b6cdf0bfd457c96992b19f04c9",
+      "dependencies": [
+        {
+          "package": "max7219-display"
+        }
+      ],
+      "crate": {
+        "package": "max7219-display",
+        "version": "0.1.5"
+      }
+    }
+  }
+}
