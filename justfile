@@ -320,9 +320,6 @@ sht31-scan:
     just espforge "new --example i2c_scanner --chip esp32c3 --dir build/sht31-src/scanner"
     sed -i -E 's/sda="[0-9]+" scl="[0-9]+"/sda="5" scl="6"/' \
         "{{ sht31_src }}/scanner/i2c_scanner.espf"
-    # The generated project needs the same esp-hal I2C overlay as the firmware:
-    # without it every transaction fails `AcknowledgeCheckFailed(Data)`.
-    cp "{{ sht31_project }}/Cargo.extra.toml" "{{ sht31_src }}/scanner/Cargo.extra.toml"
     just build "{{ sht31_src }}/scanner"
     (cd "{{ build_dir }}/build" \
         && cargo espflash save-image --merge \
