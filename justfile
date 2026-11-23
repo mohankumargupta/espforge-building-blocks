@@ -4203,10 +4203,27 @@ websockets-test: websockets-image
 
 rmt_hello_dir := justfile_directory() / "peripherals" / "rmt-hello"
 rmt_hello_out := build_dir / "rmt-hello"
+rmt_hello_part := rmt_hello_dir / "parts" / "uartwire"
 
-# Schema and resource graph: `<rmt>` plus one raw `<rmt_tx>` on GPIO 4.
+# Schema and resource graph: `<rmt>`, one raw `<rmt_tx>` on GPIO 4, and UART1
+# with its RX on GPIO 5 for the receive side.
 rmt-hello-check:
     just check {{ rmt_hello_dir }}
+
+# The virtual wire between the RMT pin and the UART line. Builds the part ->
+# peripherals/rmt-hello/uartwire.wasm, beside board.json.
+rmt-hello-part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target wasm32-unknown-unknown \
+        --manifest-path "{{ rmt_hello_part }}/Cargo.toml"
+    cp "{{ rmt_hello_part }}/target/wasm32-unknown-unknown/release/uartwire.wasm" \
+        "{{ rmt_hello_dir }}/uartwire.wasm"
+    ls -l "{{ rmt_hello_dir }}/uartwire.wasm"
+
+# The part's own tests: the framing decode, on the host.
+rmt-hello-part-test:
+    cargo test --manifest-path {{ rmt_hello_part }}/Cargo.toml
 
 # Compile it as a merged image -> build/rmt-hello/rmt-hello.bin (+ .elf).
 rmt-hello-image:
@@ -4223,13 +4240,14 @@ rmt-hello-image:
         "{{ rmt_hello_out }}/rmt-hello.elf"
     ls -l "{{ rmt_hello_out }}/rmt-hello.bin" "{{ rmt_hello_out }}/rmt-hello.elf"
 
-# Run it. RMT TX is a raw channel, so there is no part to attach: the
-# emulator still runs the transmission and the firmware logs when it drains.
-rmt-hello-run timeout="20s":
-    just esp-emu "--chip esp32c3 --firmware {{ rmt_hello_out }}/rmt-hello.bin --elf {{ rmt_hello_out }}/rmt-hello.elf --timeout {{ timeout }} --log-file {{ rmt_hello_out }}/emu.log"
+# Run it with the virtual wire on the board: RMT TX drives GPIO 4, the part
+# decodes the edges and puts the bytes on the UART1 line, and the firmware
+# prints what its UART received.
+rmt-hello-run timeout="20s": rmt-hello-part
+    just esp-emu "--chip esp32c3 --firmware {{ rmt_hello_out }}/rmt-hello.bin --cosim-board {{ rmt_hello_dir }}/board.json --elf {{ rmt_hello_out }}/rmt-hello.elf --timeout {{ timeout }} --log-file {{ rmt_hello_out }}/emu.log"
 
-# Gate: boot, then at least one completed "hello\n" transmission.
-rmt-hello-test: rmt-hello-image
+# Gate: boot, a transmitted frame, and the same text read back by UART1.
+rmt-hello-test: rmt-hello-image rmt-hello-part
     #!/usr/bin/env bash
     set -euo pipefail
     out="{{ rmt_hello_out }}/test.stdout"
@@ -4238,15 +4256,15 @@ rmt-hello-test: rmt-hello-image
     setsid just rmt-hello-run 20s > "$out" 2>&1 &
     emu=$!
     trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
-    sent=0
+    received=0
     for _ in $(seq 1 20); do
-        grep -q 'TEST: rmt hello sent' "$out" && { sent=1; break; }
+        grep -q 'TEST: uart "hello"' "$out" && { received=1; break; }
         sleep 1
     done
-    grep -E 'TEST: rmt hello' "$out" || true
-    (( sent )) || { echo "FAIL: no completed RMT transmission; see $out and {{ rmt_hello_out }}/emu.log" >&2; exit 1; }
+    grep -E 'TEST: (rmt|uart)' "$out" || true
+    (( received )) || { echo "FAIL: UART1 did not receive \"hello\" from the RMT waveform; see $out and {{ rmt_hello_out }}/emu.log" >&2; exit 1; }
     if grep -q 'TEST: rmt hello failed' "$out"; then
         echo "FAIL: the emulator reported an RMT transmit error; see $out" >&2
         exit 1
     fi
-    echo "PASS: the hello frame went out over RMT"
+    echo "PASS: the console shows \"hello\" read by UART1 from the RMT waveform"

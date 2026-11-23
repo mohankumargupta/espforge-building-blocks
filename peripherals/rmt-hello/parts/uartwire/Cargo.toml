@@ -1,0 +1,27 @@
+# A virtual part: a wire from the chip's RMT output to its own UART receiver,
+# compiled to a WebAssembly module the emulator loads. `just rmt-hello-part`
+# builds it and copies it beside board.json; README.md says what it models.
+#
+# Its own workspace (the empty [workspace] table below), so it builds on its
+# own and nothing here enters the firmware's dependency graph.
+[workspace]
+
+[package]
+name = "uartwire"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+# A cdylib builds to the .wasm module a host loads.
+crate-type = ["cdylib"]
+
+[dependencies]
+# The part SDK: the contract's types, the `Device` trait and `export_part!`.
+esp-part = { path = "../../../../esp-emulator/esp-part" }
+
+[profile.release]
+# A smaller module loads faster.
+opt-level = "s"
+lto = true
+strip = true

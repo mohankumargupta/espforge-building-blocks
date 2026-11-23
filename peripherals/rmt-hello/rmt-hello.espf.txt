@@ -1,9 +1,15 @@
 ====================
 RMT hello
 
-The esp-hal `rmt-hello` example as an espforge project: one raw RMT transmit
-channel on GPIO 4, sending "hello\n" with 115200 8N1 timing (80 MHz / 80 =
-1 MHz, 9 ticks a bit) once a second. The app supplies the PulseCodes.
+The esp-hal `rmt-hello` example as an espforge project, read back through a
+UART. One raw RMT transmit channel on GPIO 4 sends "hello\n" with 115200 8N1
+timing (80 MHz / 80 = 1 MHz, 9 ticks a bit). UART1 is wired for the receive
+side: its RX is on GPIO 5 and its TX on GPIO 6.
+
+The emulator has no wire from an RMT channel to a UART, so the virtual part in
+parts/uartwire is that wire: it reads GPIO 4 as runs of edges, decodes the 8N1
+bytes, and puts them on the UART1 line. The app reads the port and prints what
+it received, so the console shows the text the waveform carried.
 ====================
 
 # espforge
@@ -13,8 +19,9 @@ channel on GPIO 4, sending "hello\n" with 115200 8N1 timing (80 MHz / 80 =
 
 # peripherals
   <rmt id="rmt0" />
+  <uart id="uart1" uart="UART1" tx="6" rx="5" baud_rate="115200" />
 
 # devices
-  <rmt_tx id="uart_tx" bus="$rmt0" pin="4" clk_divider="80" idle_level="high" />
+  <rmt_tx id="uart_tx" bus="$rmt0" pin="4" channel="0" clk_divider="80" idle_level="high" />
 
 # services
