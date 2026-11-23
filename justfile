@@ -4197,3 +4197,56 @@ websockets-test: websockets-image
     wait_for 'TEST: wss ok' 'secure wss:// echoed the text frame' || exit 1
     grep -E 'TEST: (ip |ws |wss |websockets )' "$out"
     echo "PASS: both WebSocket variants echoed a text frame"
+
+
+# ---- peripherals/rmt-hello (the esp-hal rmt-hello example as espforge) ---
+
+rmt_hello_dir := justfile_directory() / "peripherals" / "rmt-hello"
+rmt_hello_out := build_dir / "rmt-hello"
+
+# Schema and resource graph: `<rmt>` plus one raw `<rmt_tx>` on GPIO 4.
+rmt-hello-check:
+    just check {{ rmt_hello_dir }}
+
+# Compile it as a merged image -> build/rmt-hello/rmt-hello.bin (+ .elf).
+rmt-hello-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ rmt_hello_out }}"
+    just check "{{ rmt_hello_dir }}"
+    just build "{{ rmt_hello_dir }}"
+    (cd "{{ build_dir }}/build" \
+        && cargo espflash save-image --merge \
+            --chip esp32c3 --flash-size 4mb \
+            "{{ rmt_hello_out }}/rmt-hello.bin")
+    cp "{{ build_dir }}/build/target/riscv32imc-unknown-none-elf/debug/rmt_hello" \
+        "{{ rmt_hello_out }}/rmt-hello.elf"
+    ls -l "{{ rmt_hello_out }}/rmt-hello.bin" "{{ rmt_hello_out }}/rmt-hello.elf"
+
+# Run it. RMT TX is a raw channel, so there is no part to attach: the
+# emulator still runs the transmission and the firmware logs when it drains.
+rmt-hello-run timeout="20s":
+    just esp-emu "--chip esp32c3 --firmware {{ rmt_hello_out }}/rmt-hello.bin --elf {{ rmt_hello_out }}/rmt-hello.elf --timeout {{ timeout }} --log-file {{ rmt_hello_out }}/emu.log"
+
+# Gate: boot, then at least one completed "hello\n" transmission.
+rmt-hello-test: rmt-hello-image
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{ rmt_hello_out }}/test.stdout"
+    : > "{{ rmt_hello_out }}/emu.log"
+    : > "$out"
+    setsid just rmt-hello-run 20s > "$out" 2>&1 &
+    emu=$!
+    trap 'kill -- -"$emu" 2>/dev/null || true; wait "$emu" 2>/dev/null || true' EXIT
+    sent=0
+    for _ in $(seq 1 20); do
+        grep -q 'TEST: rmt hello sent' "$out" && { sent=1; break; }
+        sleep 1
+    done
+    grep -E 'TEST: rmt hello' "$out" || true
+    (( sent )) || { echo "FAIL: no completed RMT transmission; see $out and {{ rmt_hello_out }}/emu.log" >&2; exit 1; }
+    if grep -q 'TEST: rmt hello failed' "$out"; then
+        echo "FAIL: the emulator reported an RMT transmit error; see $out" >&2
+        exit 1
+    fi
+    echo "PASS: the hello frame went out over RMT"

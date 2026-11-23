@@ -1,0 +1,20 @@
+====================
+RMT hello
+
+The esp-hal `rmt-hello` example as an espforge project: one raw RMT transmit
+channel on GPIO 4, sending "hello\n" with 115200 8N1 timing (80 MHz / 80 =
+1 MHz, 9 ticks a bit) once a second. The app supplies the PulseCodes.
+====================
+
+# espforge
+  <project name="rmt_hello" />
+  <chip type="esp32c3" />
+  <runtime type="blocking" />
+
+# peripherals
+  <rmt id="rmt0" />
+
+# devices
+  <rmt_tx id="uart_tx" bus="$rmt0" pin="4" clk_divider="80" idle_level="high" />
+
+# services
